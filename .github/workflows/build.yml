@@ -1,0 +1,56 @@
+name: Build ModbusTool
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # 1. 下载源码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. 安装 Visual Studio Installer Projects
+      - name: Install Visual Studio Installer Projects
+        shell: powershell
+        run: |
+          $vsixUrl = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/Microsoft/vsextensions/MicrosoftVisualStudio2017InstallerProjects/1.0.2/vspackage"
+
+          Invoke-WebRequest `
+            -Uri $vsixUrl `
+            -OutFile "$env:TEMP\InstallerProjects.vsix"
+
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vsixinstaller.exe" `
+            /quiet "$env:TEMP\InstallerProjects.vsix"
+
+      # 3. 查找 Visual Studio
+      - name: Locate Visual Studio
+        uses: microsoft/setup-msbuild@v2
+
+      # 4. 编译 Release
+      - name: Build Solution
+        shell: powershell
+        run: |
+          msbuild ModbusTool.sln `
+            /p:Configuration=Release `
+            /p:Platform="Any CPU" `
+            /m
+
+      # 5. 编译安装项目
+      - name: Build Installer
+        shell: powershell
+        run: |
+          msbuild Setup\ModbusTool\ModbusTool.vdproj `
+            /p:Configuration=Release `
+            /p:Platform="Any CPU"
+
+      # 6. 上传 MSI
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModbusTool-Installer
+          path: |
+            Setup\ModbusTool\Release\*.msi
+            Setup\ModbusTool\Release\*.exe
