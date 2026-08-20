@@ -60,7 +60,7 @@
             this.buttonApply.Name = "buttonApply";
             this.buttonApply.Size = new System.Drawing.Size(86, 28);
             this.buttonApply.TabIndex = 36;
-            this.buttonApply.Text = "Apply";
+            this.buttonApply.Text = "应用";
             this.buttonApply.Click += new System.EventHandler(this.buttonApply_Click);
             // 
             // labelTxtSize
@@ -69,7 +69,7 @@
             this.labelTxtSize.Name = "labelTxtSize";
             this.labelTxtSize.Size = new System.Drawing.Size(42, 14);
             this.labelTxtSize.TabIndex = 35;
-            this.labelTxtSize.Text = "Size";
+            this.labelTxtSize.Text = "数据长度";
             // 
             // txtSize
             // 
@@ -88,7 +88,7 @@
             this.label11.Name = "label11";
             this.label11.Size = new System.Drawing.Size(74, 14);
             this.label11.TabIndex = 27;
-            this.label11.Text = "Start Address";
+            this.label11.Text = "起始地址";
             // 
             // txtStartAdress
             // 
@@ -105,7 +105,7 @@
             this.buttonClear.Name = "buttonClear";
             this.buttonClear.Size = new System.Drawing.Size(86, 28);
             this.buttonClear.TabIndex = 25;
-            this.buttonClear.Text = "Clear";
+            this.buttonClear.Text = "清空";
             this.buttonClear.Click += new System.EventHandler(this.buttonClear_Click);
             // 
             // groupBoxData
