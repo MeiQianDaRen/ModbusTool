@@ -21,10 +21,7 @@ SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
-Source: "..\Release\ModbusMaster.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\Release\ModbusSlave.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\Release\Modbus.Common.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\Release\ModbusLib.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Modbus Master"; Filename: "{app}\ModbusMaster.exe"
