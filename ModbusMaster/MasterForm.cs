@@ -67,7 +67,7 @@ namespace ModbusMaster
                         _driver = new ModbusClient(new ModbusRtuCodec()) { Address = SlaveId };
                         _driver.OutgoingData += DriverOutgoingData;
                         _driver.IncommingData += DriverIncommingData;
-                        AppendLog(String.Format("Connected using RTU to {0}", PortName));
+                        AppendLog(String.Format("已通过 RTU 连接 {0}", PortName));
                         break;
 
                     case CommunicationMode.UDP:
@@ -77,7 +77,7 @@ namespace ModbusMaster
                         _driver = new ModbusClient(new ModbusTcpCodec()) { Address = SlaveId };
                         _driver.OutgoingData += DriverOutgoingData;
                         _driver.IncommingData += DriverIncommingData;
-                        AppendLog(String.Format("Connected using UDP to {0}", _socket.RemoteEndPoint));
+                        AppendLog(String.Format("已通过 UDP 连接 {0}", _socket.RemoteEndPoint));
                         break;
 
                     case CommunicationMode.TCP:
@@ -90,7 +90,7 @@ namespace ModbusMaster
                         _driver = new ModbusClient(new ModbusTcpCodec()) { Address = SlaveId };
                         _driver.OutgoingData += DriverOutgoingData;
                         _driver.IncommingData += DriverIncommingData;
-                        AppendLog(String.Format("Connected using TCP to {0}", _socket.RemoteEndPoint));
+                        AppendLog(String.Format("已通过 TCP 连接 {0}", _socket.RemoteEndPoint));
                         break;
                 }
             }
@@ -156,11 +156,11 @@ namespace ModbusMaster
                 {
                     command.Data.CopyTo(_registerData, StartAddress);
                     UpdateDataTable();
-                    AppendLog(String.Format("Read succeeded: Function code:{0}.", function));
+                    AppendLog(String.Format("读取成功: Function code:{0}.", function));
                 }
                 else
                 {
-                    AppendLog(String.Format("Failed to execute Read: Error code:{0}", result.Status));
+                    AppendLog(String.Format("读取失败: Error code:{0}", result.Status));
                 }
             }
             catch (Exception ex)
@@ -191,8 +191,8 @@ namespace ModbusMaster
                 }
                 var result = _driver.ExecuteGeneric(_portClient, command);
                 AppendLog(result.Status == CommResponse.Ack
-                              ? String.Format("Write succeeded: Function code:{0}", function)
-                              : String.Format("Failed to execute Write: Error code:{0}", result.Status));
+                              ? String.Format("写入成功: Function code:{0}", function)
+                              : String.Format("写入失败: Error code:{0}", result.Status));
             }
             catch (Exception ex)
             {
@@ -215,8 +215,8 @@ namespace ModbusMaster
                 command.Data[0] = (ushort)(_registerData[StartAddress] & 0x0100);
                 var result = _driver.ExecuteGeneric(_portClient, command);
                 AppendLog(result.Status == CommResponse.Ack
-                              ? String.Format("Write succeeded: Function code:{0}", ModbusCommand.FuncWriteCoil)
-                              : String.Format("Failed to execute Write: Error code:{0}", result.Status));
+                              ? String.Format("写入成功: Function code:{0}", ModbusCommand.FuncWriteCoil)
+                              : String.Format("写入失败: Error code:{0}", result.Status));
             }
             catch (Exception ex)
             {
