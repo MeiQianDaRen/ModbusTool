@@ -126,7 +126,7 @@
             this.groupBox4.Size = new System.Drawing.Size(859, 194);
             this.groupBox4.TabIndex = 20;
             this.groupBox4.TabStop = false;
-            this.groupBox4.Text = "Communication Log";
+            this.groupBox4.Text = "通讯日志";
             // 
             // buttonSave
             // 
@@ -134,7 +134,7 @@
             this.buttonSave.Name = "buttonSave";
             this.buttonSave.Size = new System.Drawing.Size(86, 28);
             this.buttonSave.TabIndex = 26;
-            this.buttonSave.Text = "Save";
+            this.buttonSave.Text = "保存";
             this.buttonSave.Click += new System.EventHandler(this.buttonSaveLog_ClickAsync);
             // 
             // buttonPauseLog
@@ -143,7 +143,7 @@
             this.buttonPauseLog.Name = "buttonPauseLog";
             this.buttonPauseLog.Size = new System.Drawing.Size(86, 28);
             this.buttonPauseLog.TabIndex = 25;
-            this.buttonPauseLog.Text = "Pause";
+            this.buttonPauseLog.Text = "暂停";
             this.buttonPauseLog.Click += new System.EventHandler(this.buttonPauseLog_Click);
             // 
             // listBoxCommLog
@@ -163,7 +163,7 @@
             this.buttonClear.Name = "buttonClear";
             this.buttonClear.Size = new System.Drawing.Size(86, 28);
             this.buttonClear.TabIndex = 24;
-            this.buttonClear.Text = "Clear";
+            this.buttonClear.Text = "清除";
             this.buttonClear.Click += new System.EventHandler(this.ButtonClearLogClick);
             // 
             // label1
@@ -172,7 +172,7 @@
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(86, 14);
             this.label1.TabIndex = 30;
-            this.label1.Text = "Slave delay (ms)";
+            this.label1.Text = "从站延时(ms)";
             // 
             // textBoxSlaveDelay
             // 
@@ -189,7 +189,7 @@
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(74, 14);
             this.label7.TabIndex = 28;
-            this.label7.Text = "Slave ID";
+            this.label7.Text = "从站地址";
             // 
             // textBoxSlaveID
             // 
@@ -212,7 +212,7 @@
             this.groupBox3.Size = new System.Drawing.Size(198, 110);
             this.groupBox3.TabIndex = 21;
             this.groupBox3.TabStop = false;
-            this.groupBox3.Text = "Display Format";
+            this.groupBox3.Text = "数据显示格式";
             // 
             // radioButtonLED
             // 
@@ -231,7 +231,7 @@
             this.radioButtonReverseFloat.Size = new System.Drawing.Size(90, 21);
             this.radioButtonReverseFloat.TabIndex = 5;
             this.radioButtonReverseFloat.Tag = "FloatReverse";
-            this.radioButtonReverseFloat.Text = "FloatReverse";
+            this.radioButtonReverseFloat.Text = "反转浮点";
             this.radioButtonReverseFloat.Click += new System.EventHandler(this.RadioButtonDisplayFormatCheckedChanged);
             // 
             // radioButtonInteger
@@ -243,7 +243,7 @@
             this.radioButtonInteger.TabIndex = 4;
             this.radioButtonInteger.TabStop = true;
             this.radioButtonInteger.Tag = "Integer";
-            this.radioButtonInteger.Text = "Integer";
+            this.radioButtonInteger.Text = "整数";
             this.radioButtonInteger.Click += new System.EventHandler(this.RadioButtonDisplayFormatCheckedChanged);
             // 
             // radioButtonHex
@@ -253,7 +253,7 @@
             this.radioButtonHex.Size = new System.Drawing.Size(67, 20);
             this.radioButtonHex.TabIndex = 3;
             this.radioButtonHex.Tag = "Hex";
-            this.radioButtonHex.Text = "Hex";
+            this.radioButtonHex.Text = "十六进制";
             this.radioButtonHex.Click += new System.EventHandler(this.RadioButtonDisplayFormatCheckedChanged);
             // 
             // radioButtonBinary
@@ -263,7 +263,7 @@
             this.radioButtonBinary.Size = new System.Drawing.Size(67, 21);
             this.radioButtonBinary.TabIndex = 2;
             this.radioButtonBinary.Tag = "Binary";
-            this.radioButtonBinary.Text = "Binary";
+            this.radioButtonBinary.Text = "二进制";
             this.radioButtonBinary.Click += new System.EventHandler(this.RadioButtonDisplayFormatCheckedChanged);
             // 
             // buttonImport
@@ -272,7 +272,7 @@
             this.buttonImport.Name = "buttonImport";
             this.buttonImport.Size = new System.Drawing.Size(86, 28);
             this.buttonImport.TabIndex = 26;
-            this.buttonImport.Text = "Import";
+            this.buttonImport.Text = "导入";
             this.buttonImport.Click += new System.EventHandler(this.ButtonImportClick);
             // 
             // buttonExport
@@ -281,7 +281,7 @@
             this.buttonExport.Name = "buttonExport";
             this.buttonExport.Size = new System.Drawing.Size(86, 28);
             this.buttonExport.TabIndex = 25;
-            this.buttonExport.Text = "Export";
+            this.buttonExport.Text = "导出";
             this.buttonExport.Click += new System.EventHandler(this.ButtonExportClick);
             // 
             // grpStart
@@ -296,7 +296,7 @@
             this.grpStart.Size = new System.Drawing.Size(677, 126);
             this.grpStart.TabIndex = 18;
             this.grpStart.TabStop = false;
-            this.grpStart.Text = "Communication";
+            this.grpStart.Text = "通讯";
             // 
             // groupBoxRTU
             // 
@@ -339,7 +339,7 @@
             this.label10.Name = "label10";
             this.label10.Size = new System.Drawing.Size(58, 13);
             this.label10.TabIndex = 26;
-            this.label10.Text = "Stop Bits =";
+            this.label10.Text = "停止位 =";
             // 
             // comboBoxDataBits
             // 
@@ -360,7 +360,7 @@
             this.label9.Name = "label9";
             this.label9.Size = new System.Drawing.Size(59, 13);
             this.label9.TabIndex = 24;
-            this.label9.Text = "Data Bits =";
+            this.label9.Text = "数据位 =";
             // 
             // comboBoxParity
             // 
@@ -380,7 +380,7 @@
             this.labelParity.Name = "labelParity";
             this.labelParity.Size = new System.Drawing.Size(42, 13);
             this.labelParity.TabIndex = 22;
-            this.labelParity.Text = "Parity =";
+            this.labelParity.Text = "校验位 =";
             // 
             // comboBoxBaudRate
             // 
@@ -425,7 +425,7 @@
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(66, 13);
             this.label4.TabIndex = 10;
-            this.label4.Text = "Port Name =";
+            this.label4.Text = "串口 =";
             // 
             // label5
             // 
@@ -434,7 +434,7 @@
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(41, 13);
             this.label5.TabIndex = 12;
-            this.label5.Text = "Baud =";
+            this.label5.Text = "波特率 =";
             // 
             // groupBoxMode
             // 
