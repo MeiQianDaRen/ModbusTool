@@ -97,7 +97,7 @@
             this.groupBoxFunctions.Size = new System.Drawing.Size(340, 128);
             this.groupBoxFunctions.TabIndex = 35;
             this.groupBoxFunctions.TabStop = false;
-            this.groupBoxFunctions.Text = "Functions";
+            this.groupBoxFunctions.Text = "功能";
             // 
             // txtPollDelay
             // 
@@ -115,7 +115,7 @@
             this.cbPoll.Name = "cbPoll";
             this.cbPoll.Size = new System.Drawing.Size(43, 17);
             this.cbPoll.TabIndex = 24;
-            this.cbPoll.Text = "Poll";
+            this.cbPoll.Text = "轮询";
             this.cbPoll.UseVisualStyleBackColor = true;
             this.cbPoll.CheckStateChanged += new System.EventHandler(this.cbPoll_CheckStateChanged);
             // 
@@ -125,7 +125,7 @@
             this.btnReadCoils.Name = "btnReadCoils";
             this.btnReadCoils.Size = new System.Drawing.Size(78, 35);
             this.btnReadCoils.TabIndex = 11;
-            this.btnReadCoils.Text = "Read coils";
+            this.btnReadCoils.Text = "读线圈";
             this.btnReadCoils.Click += new System.EventHandler(this.BtnReadCoilsClick);
             // 
             // btnReadDisInp
@@ -134,7 +134,7 @@
             this.btnReadDisInp.Name = "btnReadDisInp";
             this.btnReadDisInp.Size = new System.Drawing.Size(78, 35);
             this.btnReadDisInp.TabIndex = 16;
-            this.btnReadDisInp.Text = "Read discrete inputs";
+            this.btnReadDisInp.Text = "读离散输入";
             this.btnReadDisInp.Click += new System.EventHandler(this.BtnReadDisInpClick);
             // 
             // btnWriteMultipleReg
@@ -143,7 +143,7 @@
             this.btnWriteMultipleReg.Name = "btnWriteMultipleReg";
             this.btnWriteMultipleReg.Size = new System.Drawing.Size(78, 35);
             this.btnWriteMultipleReg.TabIndex = 23;
-            this.btnWriteMultipleReg.Text = "Write multiple register";
+            this.btnWriteMultipleReg.Text = "写多寄存器";
             this.btnWriteMultipleReg.Click += new System.EventHandler(this.BtnWriteMultipleRegClick);
             // 
             // btnReadHoldReg
@@ -152,7 +152,7 @@
             this.btnReadHoldReg.Name = "btnReadHoldReg";
             this.btnReadHoldReg.Size = new System.Drawing.Size(78, 35);
             this.btnReadHoldReg.TabIndex = 17;
-            this.btnReadHoldReg.Text = "Read holding register";
+            this.btnReadHoldReg.Text = "读保持寄存器";
             this.btnReadHoldReg.Click += new System.EventHandler(this.BtnReadHoldRegClick);
             // 
             // btnWriteMultipleCoils
@@ -161,7 +161,7 @@
             this.btnWriteMultipleCoils.Name = "btnWriteMultipleCoils";
             this.btnWriteMultipleCoils.Size = new System.Drawing.Size(78, 35);
             this.btnWriteMultipleCoils.TabIndex = 22;
-            this.btnWriteMultipleCoils.Text = "Write multiple coils";
+            this.btnWriteMultipleCoils.Text = "写多线圈";
             this.btnWriteMultipleCoils.Click += new System.EventHandler(this.BtnWriteMultipleCoilsClick);
             // 
             // btnReadInpReg
@@ -170,7 +170,7 @@
             this.btnReadInpReg.Name = "btnReadInpReg";
             this.btnReadInpReg.Size = new System.Drawing.Size(78, 35);
             this.btnReadInpReg.TabIndex = 18;
-            this.btnReadInpReg.Text = "Read input register";
+            this.btnReadInpReg.Text = "读输入寄存器";
             this.btnReadInpReg.Click += new System.EventHandler(this.BtnReadInpRegClick);
             // 
             // btnWriteSingleReg
@@ -179,7 +179,7 @@
             this.btnWriteSingleReg.Name = "btnWriteSingleReg";
             this.btnWriteSingleReg.Size = new System.Drawing.Size(78, 35);
             this.btnWriteSingleReg.TabIndex = 21;
-            this.btnWriteSingleReg.Text = "Write single register";
+            this.btnWriteSingleReg.Text = "写单寄存器";
             this.btnWriteSingleReg.Click += new System.EventHandler(this.BtnWriteSingleRegClick);
             // 
             // btnWriteSingleCoil
@@ -188,7 +188,7 @@
             this.btnWriteSingleCoil.Name = "btnWriteSingleCoil";
             this.btnWriteSingleCoil.Size = new System.Drawing.Size(78, 35);
             this.btnWriteSingleCoil.TabIndex = 19;
-            this.btnWriteSingleCoil.Text = "Write single coil";
+            this.btnWriteSingleCoil.Text = "写单线圈";
             this.btnWriteSingleCoil.Click += new System.EventHandler(this.BtnWriteSingleCoilClick);
             // 
             // buttonDisconnect
@@ -198,7 +198,7 @@
             this.buttonDisconnect.Name = "buttonDisconnect";
             this.buttonDisconnect.Size = new System.Drawing.Size(86, 28);
             this.buttonDisconnect.TabIndex = 37;
-            this.buttonDisconnect.Text = "Disconnect";
+            this.buttonDisconnect.Text = "断开";
             this.buttonDisconnect.Click += new System.EventHandler(this.ButtonDisconnectClick);
             // 
             // btnConnect
@@ -207,7 +207,7 @@
             this.btnConnect.Name = "btnConnect";
             this.btnConnect.Size = new System.Drawing.Size(86, 28);
             this.btnConnect.TabIndex = 36;
-            this.btnConnect.Text = "Connect";
+            this.btnConnect.Text = "连接";
             this.btnConnect.Click += new System.EventHandler(this.BtnConnectClick);
             // 
             // pollTimer
@@ -226,7 +226,7 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "MasterForm";
             this.ShowDataLength = true;
-            this.Text = "Modbus Master";
+            this.Text = "Modbus 主站";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.MasterFormClosing);
             this.Load += new System.EventHandler(this.MasterForm_Load);
             this.Controls.SetChildIndex(this.tabControl1, 0);
