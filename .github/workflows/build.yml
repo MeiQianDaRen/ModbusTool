@@ -36,110 +36,130 @@ jobs:
           echo "VS_PATH=$vsPath" >> $env:GITHUB_ENV
 
       # =========================
-      # 3. 安装 Installer Projects
+      # 3. 找到 MSBuild
       # =========================
-      - name: Install Visual Studio Installer Projects
+      - name: Locate MSBuild
         shell: powershell
         run: |
-          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -latest `
+            -products * `
+            -requires Microsoft.Component.MSBuild `
+            -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
 
-          & $installer modify `
-            --installPath "$env:VS_PATH" `
-            --add Microsoft.VisualStudio.ProjectTemplates.Msi `
-            --quiet `
-            --norestart `
-            --wait
-
-      # =========================
-      # 4. 找到 devenv
-      # =========================
-      - name: Locate devenv
-        shell: powershell
-        run: |
-          $devenv = Join-Path "$env:VS_PATH" "Common7\IDE\devenv.com"
-
-          if (-not (Test-Path $devenv)) {
-            Write-Error "devenv.com not found."
+          if (-not $msbuild) {
+            Write-Error "MSBuild not found."
             exit 1
           }
 
-          Write-Host "devenv:"
-          Write-Host $devenv
+          Write-Host "MSBuild:"
+          Write-Host $msbuild
 
-          echo "DEVENV=$devenv" >> $env:GITHUB_ENV
+          echo "MSBUILD=$msbuild" >> $env:GITHUB_ENV
 
       # =========================
-      # 5. 编译整个解决方案
+      # 4. 编译 C# 项目
       # =========================
       - name: Build Solution
         shell: powershell
         run: |
-          & "$env:DEVENV" `
+          & "$env:MSBUILD" `
             "$env:GITHUB_WORKSPACE\ModbusTool.sln" `
-            /Build "Release" `
-            /Out "$env:GITHUB_WORKSPACE\build.log"
+            /t:Build `
+            /p:Configuration=Release `
+            /p:Platform="Any CPU" `
+            /m
 
-          $exitCode = $LASTEXITCODE
-
-          Write-Host "Visual Studio exit code: $exitCode"
-
-          if (Test-Path "$env:GITHUB_WORKSPACE\build.log") {
-            Get-Content "$env:GITHUB_WORKSPACE\build.log"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "C# build failed."
+            exit $LASTEXITCODE
           }
 
-          if ($exitCode -ne 0) {
-            exit $exitCode
-          }
-
+      # =========================
+      # 5. 查看编译结果
+      # =========================
       - name: Inspect Build Output
         shell: powershell
         run: |
           Write-Host "===== Release Directory ====="
 
+          if (-not (Test-Path "$env:GITHUB_WORKSPACE\Release")) {
+            Write-Error "Release directory not found."
+            exit 1
+          }
+
           Get-ChildItem `
             "$env:GITHUB_WORKSPACE\Release" `
-            -Recurse `
-            -ErrorAction SilentlyContinue |
-            Select-Object FullName
-
-          Write-Host ""
-          Write-Host "===== Setup Directory ====="
-
-          Get-ChildItem `
-            "$env:GITHUB_WORKSPACE\Setup\ModbusTool" `
-            -Recurse `
-            -ErrorAction SilentlyContinue |
+            -Recurse |
             Select-Object FullName
 
       # =========================
-      # 6. 查找 MSI
+      # 6. 安装 Inno Setup
+      # =========================
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup --yes --no-progress
+
+      # =========================
+      # 7. 编译安装包
+      # =========================
+      - name: Build Installer
+        shell: powershell
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+
+          if (-not (Test-Path $iscc)) {
+            Write-Error "Inno Setup compiler not found."
+            exit 1
+          }
+
+          $iss = "$env:GITHUB_WORKSPACE\installer\ModbusTool.iss"
+
+          if (-not (Test-Path $iss)) {
+            Write-Error "ModbusTool.iss not found."
+            exit 1
+          }
+
+          Write-Host "Building installer:"
+          Write-Host $iss
+
+          & $iscc $iss
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup build failed."
+            exit $LASTEXITCODE
+          }
+
+      # =========================
+      # 8. 查找 EXE 安装包
       # =========================
       - name: Find Installer
         shell: powershell
         run: |
-          Write-Host "===== MSI ====="
+          Write-Host "===== Installer ====="
 
-          $msi = Get-ChildItem `
-            -Path "$env:GITHUB_WORKSPACE" `
-            -Filter "*.msi" `
+          $installer = Get-ChildItem `
+            -Path "$env:GITHUB_WORKSPACE\installer" `
+            -Filter "*.exe" `
             -Recurse `
             -ErrorAction SilentlyContinue
 
-          if (-not $msi) {
-            Write-Error "MSI was not generated."
+          if (-not $installer) {
+            Write-Error "Installer EXE was not generated."
             exit 1
           }
 
-          foreach ($file in $msi) {
+          foreach ($file in $installer) {
             Write-Host $file.FullName
           }
 
       # =========================
-      # 7. 上传 MSI
+      # 9. 上传安装包
       # =========================
-      - name: Upload MSI
+      - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: ModbusTool-MSI
+          name: ModbusTool-Setup
           path: |
-            **/*.msi
+            installer/*.exe
