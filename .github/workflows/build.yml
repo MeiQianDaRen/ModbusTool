@@ -8,13 +8,17 @@ jobs:
     runs-on: windows-latest
 
     steps:
+
+      # =========================
+      # 1. 下载源码
+      # =========================
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Install Visual Studio Installer Projects
+      # =========================
+      # 2. 查找 Visual Studio
+      # =========================
+      - name: Locate Visual Studio
         shell: powershell
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -26,46 +30,96 @@ jobs:
             exit 1
           }
 
-          Write-Host "Visual Studio found at:"
+          Write-Host "Visual Studio:"
           Write-Host $vsPath
 
+          echo "VS_PATH=$vsPath" >> $env:GITHUB_ENV
+
+      # =========================
+      # 3. 安装 Installer Projects
+      # =========================
+      - name: Install Visual Studio Installer Projects
+        shell: powershell
+        run: |
           $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
 
           & $installer modify `
-            --installPath "$vsPath" `
+            --installPath "$env:VS_PATH" `
             --add Microsoft.VisualStudio.ProjectTemplates.Msi `
             --quiet `
             --norestart `
             --wait
 
+      # =========================
+      # 4. 找到 devenv
+      # =========================
+      - name: Locate devenv
+        shell: powershell
+        run: |
+          $devenv = Join-Path "$env:VS_PATH" "Common7\IDE\devenv.com"
+
+          if (-not (Test-Path $devenv)) {
+            Write-Error "devenv.com not found."
+            exit 1
+          }
+
+          Write-Host "devenv:"
+          Write-Host $devenv
+
+          echo "DEVENV=$devenv" >> $env:GITHUB_ENV
+
+      # =========================
+      # 5. 编译整个解决方案
+      # =========================
       - name: Build Solution
         shell: powershell
         run: |
-          msbuild ModbusTool.sln `
-            /p:Configuration=Release `
-            /p:Platform="Any CPU" `
-            /m
+          & "$env:DEVENV" `
+            "$env:GITHUB_WORKSPACE\ModbusTool.sln" `
+            /Build "Release" `
+            /Out "$env:GITHUB_WORKSPACE\build.log"
 
-      - name: Build Installer
+          $exitCode = $LASTEXITCODE
+
+          Write-Host "Visual Studio exit code: $exitCode"
+
+          if (Test-Path "$env:GITHUB_WORKSPACE\build.log") {
+            Get-Content "$env:GITHUB_WORKSPACE\build.log"
+          }
+
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
+
+      # =========================
+      # 6. 查找 MSI
+      # =========================
+      - name: Find Installer
         shell: powershell
         run: |
-          msbuild Setup\ModbusTool\ModbusTool.vdproj `
-            /p:Configuration=Release `
-            /p:Platform="Any CPU"
+          Write-Host "===== MSI ====="
 
-      - name: List build output
-        shell: powershell
-        run: |
-          Write-Host "===== MSI FILES ====="
-          Get-ChildItem -Path . -Filter *.msi -Recurse | Select-Object FullName
+          $msi = Get-ChildItem `
+            -Path "$env:GITHUB_WORKSPACE" `
+            -Filter "*.msi" `
+            -Recurse `
+            -ErrorAction SilentlyContinue
 
-          Write-Host "===== EXE FILES ====="
-          Get-ChildItem -Path . -Filter *.exe -Recurse | Select-Object FullName
+          if (-not $msi) {
+            Write-Error "MSI was not generated."
+            exit 1
+          }
 
-      - name: Upload Installer
+          foreach ($file in $msi) {
+            Write-Host $file.FullName
+          }
+
+      # =========================
+      # 7. 上传 MSI
+      # =========================
+      - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: ModbusTool-Installer
+          name: ModbusTool-MSI
           path: |
             **/*.msi
-            **/setup.exe
