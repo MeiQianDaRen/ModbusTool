@@ -57,7 +57,7 @@ namespace ModbusSlave
                         _listener = _uart.GetListener(rtuServer);
                         _listener.ServeCommand += listener_ServeCommand;
                         _listener.Start();
-                        AppendLog(String.Format("Connected using RTU to {0}", PortName));
+                        AppendLog(String.Format("已连接 RTU to {0}", PortName));
                         break;
 
                     case CommunicationMode.UDP:
@@ -71,7 +71,7 @@ namespace ModbusSlave
                         _listener = _socket.GetUdpListener(udpServer);
                         _listener.ServeCommand += listener_ServeCommand;
                         _listener.Start();
-                        AppendLog(String.Format("Listening to UDP port {0}", TCPPort));
+                        AppendLog(String.Format("正在监听 UDP port {0}", TCPPort));
                         break;
 
                     case CommunicationMode.TCP:
@@ -81,7 +81,7 @@ namespace ModbusSlave
                         //create a server driver
                         _thread = new Thread(Worker);
                         _thread.Start();
-                        AppendLog(String.Format("Listening to TCP port {0}", TCPPort));
+                        AppendLog(String.Format("正在监听TCP port {0}", TCPPort));
                         break;
                 }
             }
@@ -114,7 +114,7 @@ namespace ModbusSlave
                     _listener = _socket.GetTcpListener(server);
                     _listener.ServeCommand += listener_ServeCommand;
                     _listener.Start();
-                    AppendLog(String.Format("Accepted connection."));
+                    AppendLog(String.Format("已接受客户端连接"));
                     Thread.Sleep(1);
                 }
             }
@@ -199,7 +199,7 @@ namespace ModbusSlave
                     DoWrite(command);
                     break;
                 default:
-                    AppendLog(String.Format("Illegal Function, expecting function code {0}.", command.FunctionCode));
+                    AppendLog(String.Format("非法功能码, expecting function code {0}.", command.FunctionCode));
                     //return an exception
                     command.ExceptionCode = ModbusCommand.ErrorIllegalFunction;
                     break;
@@ -210,7 +210,7 @@ namespace ModbusSlave
         {
             for (int i = 0; i < command.Count; i++)
                 command.Data[i] = _registerData[command.Offset + i];
-            AppendLog(String.Format("Sent data: Function code:{0}.", command.FunctionCode));
+            AppendLog(String.Format("已发送数据: Function code:{0}.", command.FunctionCode));
 
         }
 
@@ -219,17 +219,17 @@ namespace ModbusSlave
             var dataAddress = command.Offset;
             if (dataAddress < StartAddress || dataAddress > StartAddress + DataLength)
             {
-                AppendLog(String.Format("Received address is not within viewable range, Received address:{0}.", dataAddress));
+                AppendLog(String.Format("接收地址超出当前范围, Received address:{0}.", dataAddress));
                 return;
             }
             if ((command.Count + dataAddress) > _registerData.Length)
             {
-                AppendLog(String.Format("Received address is not within viewable range, Received address:{0}.", dataAddress));
+                AppendLog(String.Format("接收地址超出当前范围, Received address:{0}.", dataAddress));
                 return;
             }
             command.Data.CopyTo(_registerData, dataAddress);
             UpdateDataTable();
-            AppendLog(String.Format("Received data: Function code:{0}.", command.FunctionCode));
+            AppendLog(String.Format("已接收数据: Function code:{0}.", command.FunctionCode));
         }
 
         #endregion
