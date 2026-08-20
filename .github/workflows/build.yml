@@ -8,28 +8,36 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1. 下载源码
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. 安装 Visual Studio Installer Projects
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Install Visual Studio Installer Projects
         shell: powershell
         run: |
-          $vsixUrl = "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/Microsoft/vsextensions/MicrosoftVisualStudio2017InstallerProjects/1.0.2/vspackage"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 
-          Invoke-WebRequest `
-            -Uri $vsixUrl `
-            -OutFile "$env:TEMP\InstallerProjects.vsix"
+          $vsPath = & $vswhere -latest -products * -property installationPath
 
-          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vsixinstaller.exe" `
-            /quiet "$env:TEMP\InstallerProjects.vsix"
+          if (-not $vsPath) {
+            Write-Error "Visual Studio installation not found."
+            exit 1
+          }
 
-      # 3. 查找 Visual Studio
-      - name: Locate Visual Studio
-        uses: microsoft/setup-msbuild@v2
+          Write-Host "Visual Studio found at:"
+          Write-Host $vsPath
 
-      # 4. 编译 Release
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+
+          & $installer modify `
+            --installPath "$vsPath" `
+            --add Microsoft.VisualStudio.ProjectTemplates.Msi `
+            --quiet `
+            --norestart `
+            --wait
+
       - name: Build Solution
         shell: powershell
         run: |
@@ -38,7 +46,6 @@ jobs:
             /p:Platform="Any CPU" `
             /m
 
-      # 5. 编译安装项目
       - name: Build Installer
         shell: powershell
         run: |
@@ -46,11 +53,19 @@ jobs:
             /p:Configuration=Release `
             /p:Platform="Any CPU"
 
-      # 6. 上传 MSI
-      - name: Upload MSI
+      - name: List build output
+        shell: powershell
+        run: |
+          Write-Host "===== MSI FILES ====="
+          Get-ChildItem -Path . -Filter *.msi -Recurse | Select-Object FullName
+
+          Write-Host "===== EXE FILES ====="
+          Get-ChildItem -Path . -Filter *.exe -Recurse | Select-Object FullName
+
+      - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: ModbusTool-Installer
           path: |
-            Setup\ModbusTool\Release\*.msi
-            Setup\ModbusTool\Release\*.exe
+            **/*.msi
+            **/setup.exe
