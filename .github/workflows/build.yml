@@ -91,6 +91,26 @@ jobs:
             exit $exitCode
           }
 
+      - name: Inspect Build Output
+        shell: powershell
+        run: |
+          Write-Host "===== Release Directory ====="
+
+          Get-ChildItem `
+            "$env:GITHUB_WORKSPACE\Release" `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object FullName
+
+          Write-Host ""
+          Write-Host "===== Setup Directory ====="
+
+          Get-ChildItem `
+            "$env:GITHUB_WORKSPACE\Setup\ModbusTool" `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object FullName
+
       # =========================
       # 6. 查找 MSI
       # =========================
