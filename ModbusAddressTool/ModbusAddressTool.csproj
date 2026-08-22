@@ -19,47 +19,92 @@
 
     <ApplicationIcon></ApplicationIcon>
 
-    <!-- 输出到仓库根目录 Release -->
-    <OutputPath Condition="'$(Configuration)' == 'Release'">
+    <!--
+      重要：
+      不再使用：
       ..\Release\ModbusAddressTool\
-    </OutputPath>
 
-    <OutputPath Condition="'$(Configuration)' == 'Debug'">
-      bin\Debug\
-    </OutputPath>
+      直接输出到项目自己的 bin\Release。
+      这样可以避免 MSBuild 18.x 对 OutputPath
+      进行 Path.Combine 时出现 Illegal characters in path。
+    -->
+
+    <OutputPath Condition="'$(Configuration)' == 'Release'">bin\Release\</OutputPath>
+    <OutputPath Condition="'$(Configuration)' == 'Debug'">bin\Debug\</OutputPath>
+
+    <IntermediateOutputPath Condition="'$(Configuration)' == 'Release'">obj\Release\</IntermediateOutputPath>
+    <IntermediateOutputPath Condition="'$(Configuration)' == 'Debug'">obj\Debug\</IntermediateOutputPath>
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+
+  <!-- Debug -->
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
+
     <PlatformTarget>AnyCPU</PlatformTarget>
+
     <DebugSymbols>true</DebugSymbols>
+
     <DebugType>full</DebugType>
+
     <Optimize>false</Optimize>
+
     <DefineConstants>DEBUG;TRACE</DefineConstants>
+
     <ErrorReport>prompt</ErrorReport>
+
     <WarningLevel>4</WarningLevel>
+
     <Prefer32Bit>false</Prefer32Bit>
+
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+
+  <!-- Release -->
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
+
     <PlatformTarget>AnyCPU</PlatformTarget>
+
     <DebugType>pdbonly</DebugType>
+
     <Optimize>true</Optimize>
+
     <DefineConstants>TRACE</DefineConstants>
+
     <ErrorReport>prompt</ErrorReport>
+
     <WarningLevel>4</WarningLevel>
+
     <Prefer32Bit>false</Prefer32Bit>
+
   </PropertyGroup>
+
+
+  <!-- Framework -->
 
   <ItemGroup>
+
     <Reference Include="System" />
+
     <Reference Include="System.Core" />
+
     <Reference Include="System.Data" />
+
     <Reference Include="System.Drawing" />
+
     <Reference Include="System.IO.Ports" />
+
     <Reference Include="System.Runtime.Serialization" />
+
     <Reference Include="System.Windows.Forms" />
+
     <Reference Include="System.Xml" />
+
   </ItemGroup>
+
+
+  <!-- Source -->
 
   <ItemGroup>
 
@@ -74,6 +119,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
 
   </ItemGroup>
+
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 
