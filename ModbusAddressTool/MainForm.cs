@@ -16,6 +16,9 @@ namespace ModbusAddressTool
 {
     public class MainForm : Form
     {
+        private const string DefaultProfileFileName =
+            "ModbusAddressDefault.json";
+
         private SerialPort _serialPort;
         private TcpClient _tcpClient;
         private UdpClient _udpClient;
@@ -70,6 +73,7 @@ namespace ModbusAddressTool
         private Button _btnWriteAll;
         private Button _btnImport;
         private Button _btnExport;
+        private Button _btnSaveDefault;
 
         private RichTextBox _txtLog;
 
@@ -508,10 +512,17 @@ namespace ModbusAddressTool
             SetAccentButton(_btnDelete, Color.FromArgb(214, 69, 65));
             _btnImport = CreateButton("导入", ImportDevices);
             _btnExport = CreateButton("导出", ExportDevices);
+            _btnSaveDefault = CreateButton("保存默认", SaveDefaultDevice);
+            _btnAdd.Width = 76;
+            _btnDelete.Width = 64;
+            _btnImport.Width = 64;
+            _btnExport.Width = 64;
+            _btnSaveDefault.Width = 88;
             fileButtons.Controls.Add(_btnAdd);
             fileButtons.Controls.Add(_btnDelete);
             fileButtons.Controls.Add(_btnImport);
             fileButtons.Controls.Add(_btnExport);
+            fileButtons.Controls.Add(_btnSaveDefault);
             toolbar.Controls.Add(fileButtons, 0, 0);
 
             var display = new FlowLayoutPanel
@@ -867,35 +878,64 @@ namespace ModbusAddressTool
 
         private void InitializeDevices()
         {
-            _devices.Add(
-                new DeviceProfile
-                {
-                    Name = "设备1",
-
-                    ReadFunctionCode = 3,
-
-                    WriteFunctionCode = 6,
-
-                    RegisterAddress = 0x00D0,
-
-                    CurrentAddress = 1,
-
-                    NewAddress = 2,
-
-                    CustomReadFrame = "",
-
-                    CustomWriteFrame = "",
-
-                    UseCustomWriteFrame = false,
-
-                    AutoAppendCrc = true,
-
-                    VerifyAfterWrite = true
-                });
+            if (!LoadDefaultDevice())
+            {
+                _devices.Add(
+                    new DeviceProfile
+                    {
+                        Name = "设备1",
+                        ReadFunctionCode = 3,
+                        WriteFunctionCode = 6,
+                        RegisterAddress = 0x00D0,
+                        CurrentAddress = 1,
+                        NewAddress = 2,
+                        CustomReadFrame = "",
+                        CustomWriteFrame = "",
+                        UseCustomWriteFrame = false,
+                        AutoAppendCrc = true,
+                        VerifyAfterWrite = true
+                    });
+            }
 
             RefreshGrid();
-
             SelectDevice(0);
+        }
+
+        private bool LoadDefaultDevice()
+        {
+            string path = GetDefaultProfilePath();
+            if (!File.Exists(path))
+                return false;
+
+            try
+            {
+                var serializer = new DataContractJsonSerializer(
+                    typeof(DeviceProfile));
+                DeviceProfile device;
+                using (FileStream stream = File.OpenRead(path))
+                {
+                    device = serializer.ReadObject(stream) as DeviceProfile;
+                }
+                if (device == null)
+                    throw new InvalidDataException("默认配置文件格式错误。");
+
+                _devices.Add(device);
+                Log("已加载默认设备配置：" + path);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log("默认设备配置加载失败，将使用内置配置：" + ex.Message);
+                return false;
+            }
+        }
+
+        private static string GetDefaultProfilePath()
+        {
+            return Path.Combine(
+                Path.GetDirectoryName(
+                    typeof(MainForm).Assembly.Location),
+                DefaultProfileFileName);
         }
 
         // ============================================================
@@ -2354,6 +2394,52 @@ namespace ModbusAddressTool
         // ============================================================
         // 导入导出
         // ============================================================
+
+        private void SaveDefaultDevice(
+            object sender,
+            EventArgs e)
+        {
+            if (!SaveEditor())
+                return;
+
+            try
+            {
+                string path = WriteDefaultDevice();
+
+                int index = _selectedIndex;
+                RefreshGrid();
+                SelectDevice(index);
+                Log("当前设备已保存为默认配置：" + path);
+                MessageBox.Show(
+                    "默认配置已保存。\r\n" + path,
+                    "保存成功",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                Log("默认配置保存失败：" + ex.Message);
+                MessageBox.Show(
+                    "默认配置保存失败：\r\n" + ex.Message,
+                    "保存失败",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private string WriteDefaultDevice()
+        {
+            string path = GetDefaultProfilePath();
+            var serializer = new DataContractJsonSerializer(
+                typeof(DeviceProfile));
+            using (FileStream stream = File.Create(path))
+            {
+                serializer.WriteObject(
+                    stream,
+                    _devices[_selectedIndex]);
+            }
+            return path;
+        }
 
         private void ExportDevices(
             object sender,
