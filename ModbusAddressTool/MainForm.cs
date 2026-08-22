@@ -837,7 +837,7 @@ namespace ModbusAddressTool
                 Margin = new Padding(0)
             };
             _btnRead = CreateButton("读取当前设备", ReadSelectedDevice);
-            _btnWrite = CreateButton("修改当前设备", WriteSelectedDevice);
+            _btnWrite = CreateButton("保存修改", WriteSelectedDevice);
             SetAccentButton(_btnWrite, Color.FromArgb(32, 123, 229));
             actions.Controls.Add(_btnRead);
             actions.Controls.Add(_btnWrite);
@@ -3056,9 +3056,24 @@ namespace ModbusAddressTool
             {
                 serializer.WriteObject(
                     stream,
-                    _devices);
+                    CreateDevicesForPersistence());
             }
             return path;
+        }
+
+        private List<DeviceProfile> CreateDevicesForPersistence()
+        {
+            List<DeviceProfile> devices = _devices.ConvertAll(
+                device => device.Clone());
+            foreach (DeviceProfile device in devices)
+            {
+                if (device.CustomRegisterItems == null)
+                    continue;
+
+                foreach (CustomRegisterItem item in device.CustomRegisterItems)
+                    item.CurrentValue = null;
+            }
+            return devices;
         }
 
         private void ExportDevices(
@@ -3094,7 +3109,7 @@ namespace ModbusAddressTool
                 {
                     serializer.WriteObject(
                         stream,
-                        _devices);
+                        CreateDevicesForPersistence());
                 }
 
                 Log(
