@@ -83,13 +83,21 @@ jobs:
         shell: powershell
         run: |
 
-          if (Test-Path "$env:GITHUB_WORKSPACE\Release") {
+          $release = "$env:GITHUB_WORKSPACE\Release"
+
+          if (Test-Path $release) {
 
             Remove-Item `
-              "$env:GITHUB_WORKSPACE\Release" `
+              $release `
               -Recurse `
               -Force
           }
+
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path $release |
+            Out-Null
 
 
       # ============================================================
@@ -100,12 +108,18 @@ jobs:
         shell: powershell
         run: |
 
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "Building ModbusTool Solution"
+          Write-Host "======================================"
+
           & "$env:MSBUILD" `
             "$env:GITHUB_WORKSPACE\ModbusTool.sln" `
             /t:Build `
             /p:Configuration=Release `
             /p:Platform="Any CPU" `
-            /m
+            /m `
+            /verbosity:minimal
 
           if ($LASTEXITCODE -ne 0) {
 
@@ -114,31 +128,237 @@ jobs:
             exit $LASTEXITCODE
           }
 
+          Write-Host ""
+          Write-Host "C# build completed successfully."
+
 
       # ============================================================
-      # 6. Verify ModbusAddressTool
+      # 6. Locate all generated EXE files
+      # ============================================================
+
+      - name: Locate Generated EXE Files
+        shell: powershell
+        run: |
+
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "Searching for generated EXE files"
+          Write-Host "======================================"
+
+          $root = "$env:GITHUB_WORKSPACE"
+
+          $exeFiles = Get-ChildItem `
+            -Path $root `
+            -Recurse `
+            -File `
+            -Filter "*.exe" `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.FullName -notlike "$root\installer\*" -and
+              $_.FullName -notlike "$root\Release\*"
+            }
+
+          if (-not $exeFiles) {
+
+            Write-Host ""
+            Write-Host "No EXE files found."
+            Write-Host ""
+            Write-Host "Directory structure:"
+
+            Get-ChildItem `
+              -Path $root `
+              -Recurse `
+              -File `
+              -ErrorAction SilentlyContinue |
+              Select-Object FullName
+
+            Write-Error "No generated EXE files were found."
+
+            exit 1
+          }
+
+          foreach ($file in $exeFiles) {
+
+            Write-Host ""
+            Write-Host "Found:"
+            Write-Host $file.FullName
+          }
+
+
+      # ============================================================
+      # 7. Collect Release Files
+      # ============================================================
+
+      - name: Collect Release Files
+        shell: powershell
+        run: |
+
+          $root = "$env:GITHUB_WORKSPACE"
+
+          $release = "$root\Release"
+
+          if (-not (Test-Path $release)) {
+
+            New-Item `
+              -ItemType Directory `
+              -Force `
+              -Path $release |
+              Out-Null
+          }
+
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "Collecting build output"
+          Write-Host "======================================"
+
+          # ----------------------------------------------------------
+          # ModbusAddressTool
+          # ----------------------------------------------------------
+
+          $addressTool = Get-ChildItem `
+            -Path "$root\ModbusAddressTool" `
+            -Recurse `
+            -File `
+            -Filter "ModbusAddressTool.exe" `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if ($null -eq $addressTool) {
+
+            Write-Host ""
+            Write-Host "ModbusAddressTool.exe was not found."
+
+            Write-Host ""
+            Write-Host "ModbusAddressTool directory contents:"
+
+            if (Test-Path "$root\ModbusAddressTool") {
+
+              Get-ChildItem `
+                "$root\ModbusAddressTool" `
+                -Recurse `
+                -File `
+                -ErrorAction SilentlyContinue |
+                Select-Object FullName
+            }
+
+            Write-Error "ModbusAddressTool.exe was not generated."
+
+            exit 1
+          }
+
+          Write-Host ""
+          Write-Host "ModbusAddressTool found:"
+          Write-Host $addressTool.FullName
+
+          Copy-Item `
+            $addressTool.FullName `
+            "$release\ModbusAddressTool.exe" `
+            -Force
+
+
+          # ----------------------------------------------------------
+          # ModbusMaster
+          # ----------------------------------------------------------
+
+          $master = Get-ChildItem `
+            -Path "$root\ModbusMaster" `
+            -Recurse `
+            -File `
+            -Filter "ModbusMaster.exe" `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if ($master) {
+
+            Write-Host ""
+            Write-Host "ModbusMaster found:"
+            Write-Host $master.FullName
+
+            Copy-Item `
+              $master.FullName `
+              "$release\ModbusMaster.exe" `
+              -Force
+          }
+          else {
+
+            Write-Host ""
+            Write-Host "ModbusMaster.exe not found."
+          }
+
+
+          # ----------------------------------------------------------
+          # ModbusSlave
+          # ----------------------------------------------------------
+
+          $slave = Get-ChildItem `
+            -Path "$root\ModbusSlave" `
+            -Recurse `
+            -File `
+            -Filter "ModbusSlave.exe" `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if ($slave) {
+
+            Write-Host ""
+            Write-Host "ModbusSlave found:"
+            Write-Host $slave.FullName
+
+            Copy-Item `
+              $slave.FullName `
+              "$release\ModbusSlave.exe" `
+              -Force
+          }
+          else {
+
+            Write-Host ""
+            Write-Host "ModbusSlave.exe not found."
+          }
+
+
+          # ----------------------------------------------------------
+          # Show final Release
+          # ----------------------------------------------------------
+
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "Final Release directory"
+          Write-Host "======================================"
+
+          Get-ChildItem `
+            $release `
+            -Recurse `
+            -File |
+            Select-Object FullName, Length
+
+
+      # ============================================================
+      # 8. Verify ModbusAddressTool
       # ============================================================
 
       - name: Verify Address Tool
         shell: powershell
         run: |
 
-          $addressTool =
-            "$env:GITHUB_WORKSPACE\Release\ModbusAddressTool\ModbusAddressTool.exe"
+          $addressTool = "$env:GITHUB_WORKSPACE\Release\ModbusAddressTool.exe"
 
           if (-not (Test-Path $addressTool)) {
 
-            Write-Error `
-              "ModbusAddressTool.exe was not generated."
-
-            Write-Host "Release directory:"
+            Write-Host ""
+            Write-Host "======================================"
+            Write-Host "ERROR: ModbusAddressTool.exe missing"
+            Write-Host "======================================"
 
             if (Test-Path "$env:GITHUB_WORKSPACE\Release") {
 
               Get-ChildItem `
                 "$env:GITHUB_WORKSPACE\Release" `
-                -Recurse
+                -Recurse `
+                -File |
+                Select-Object FullName
             }
+
+            Write-Error "ModbusAddressTool.exe was not generated."
 
             exit 1
           }
@@ -150,9 +370,15 @@ jobs:
 
           Write-Host $addressTool
 
+          $fileInfo = Get-Item $addressTool
+
+          Write-Host ""
+          Write-Host "File size:"
+          Write-Host $fileInfo.Length
+
 
       # ============================================================
-      # 7. Verify original programs
+      # 9. Inspect Release
       # ============================================================
 
       - name: Inspect Release
@@ -162,14 +388,22 @@ jobs:
           Write-Host ""
           Write-Host "========== Release =========="
 
+          if (-not (Test-Path "$env:GITHUB_WORKSPACE\Release")) {
+
+            Write-Error "Release directory does not exist."
+
+            exit 1
+          }
+
           Get-ChildItem `
             "$env:GITHUB_WORKSPACE\Release" `
-            -Recurse |
-            Select-Object FullName
+            -Recurse `
+            -File |
+            Select-Object FullName, Length
 
 
       # ============================================================
-      # 8. Install Inno Setup
+      # 10. Install Inno Setup
       # ============================================================
 
       - name: Install Inno Setup
@@ -182,14 +416,14 @@ jobs:
 
 
       # ============================================================
-      # 9. Build Installer
+      # 11. Build Installer
       # ============================================================
 
       - name: Build Installer
         shell: powershell
         run: |
 
-          $iscc =
+          $iscc = `
             "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
           if (-not (Test-Path $iscc)) {
@@ -200,7 +434,7 @@ jobs:
             exit 1
           }
 
-          $iss =
+          $iss = `
             "$env:GITHUB_WORKSPACE\installer\ModbusTool.iss"
 
           if (-not (Test-Path $iss)) {
@@ -210,6 +444,11 @@ jobs:
 
             exit 1
           }
+
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "Building installer"
+          Write-Host "======================================"
 
           & $iscc $iss
 
@@ -221,16 +460,19 @@ jobs:
             exit $LASTEXITCODE
           }
 
+          Write-Host ""
+          Write-Host "Inno Setup build completed successfully."
+
 
       # ============================================================
-      # 10. Find Installer
+      # 12. Find Installer
       # ============================================================
 
       - name: Find Installer
         shell: powershell
         run: |
 
-          $installer =
+          $installer = `
             Get-ChildItem `
               -Path "$env:GITHUB_WORKSPACE\installer" `
               -Filter "*.exe" `
@@ -245,14 +487,21 @@ jobs:
             exit 1
           }
 
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "Installer generated"
+          Write-Host "======================================"
+
           foreach ($file in $installer) {
 
+            Write-Host ""
             Write-Host $file.FullName
+            Write-Host "Size: $($file.Length) bytes"
           }
 
 
       # ============================================================
-      # 11. Upload Complete Release
+      # 13. Upload Complete Release
       # ============================================================
 
       - name: Upload Release
@@ -267,7 +516,7 @@ jobs:
 
 
       # ============================================================
-      # 12. Upload Installer
+      # 14. Upload Installer
       # ============================================================
 
       - name: Upload Installer
