@@ -4,29 +4,40 @@ on:
   workflow_dispatch:
 
 jobs:
+
   build:
+
     runs-on: windows-latest
 
     steps:
 
-      # =========================
-      # 1. 下载源码
-      # =========================
+      # ============================================================
+      # 1. Checkout
+      # ============================================================
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      # =========================
-      # 2. 查找 Visual Studio
-      # =========================
+
+      # ============================================================
+      # 2. Locate Visual Studio
+      # ============================================================
+
       - name: Locate Visual Studio
         shell: powershell
         run: |
+
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 
-          $vsPath = & $vswhere -latest -products * -property installationPath
+          $vsPath = & $vswhere `
+            -latest `
+            -products * `
+            -property installationPath
 
           if (-not $vsPath) {
+
             Write-Error "Visual Studio installation not found."
+
             exit 1
           }
 
@@ -35,20 +46,26 @@ jobs:
 
           echo "VS_PATH=$vsPath" >> $env:GITHUB_ENV
 
-      # =========================
-      # 3. 找到 MSBuild
-      # =========================
+
+      # ============================================================
+      # 3. Locate MSBuild
+      # ============================================================
+
       - name: Locate MSBuild
         shell: powershell
         run: |
+
           $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
             -latest `
             -products * `
             -requires Microsoft.Component.MSBuild `
-            -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+            -find MSBuild\**\Bin\MSBuild.exe |
+            Select-Object -First 1
 
           if (-not $msbuild) {
+
             Write-Error "MSBuild not found."
+
             exit 1
           }
 
@@ -57,12 +74,32 @@ jobs:
 
           echo "MSBUILD=$msbuild" >> $env:GITHUB_ENV
 
-      # =========================
-      # 4. 编译 C# 项目
-      # =========================
+
+      # ============================================================
+      # 4. Clean
+      # ============================================================
+
+      - name: Clean
+        shell: powershell
+        run: |
+
+          if (Test-Path "$env:GITHUB_WORKSPACE\Release") {
+
+            Remove-Item `
+              "$env:GITHUB_WORKSPACE\Release" `
+              -Recurse `
+              -Force
+          }
+
+
+      # ============================================================
+      # 5. Build Solution
+      # ============================================================
+
       - name: Build Solution
         shell: powershell
         run: |
+
           & "$env:MSBUILD" `
             "$env:GITHUB_WORKSPACE\ModbusTool.sln" `
             /t:Build `
@@ -71,95 +108,174 @@ jobs:
             /m
 
           if ($LASTEXITCODE -ne 0) {
+
             Write-Error "C# build failed."
+
             exit $LASTEXITCODE
           }
 
-      # =========================
-      # 5. 查看编译结果
-      # =========================
-      - name: Inspect Build Output
+
+      # ============================================================
+      # 6. Verify ModbusAddressTool
+      # ============================================================
+
+      - name: Verify Address Tool
         shell: powershell
         run: |
-          Write-Host "===== Release Directory ====="
 
-          if (-not (Test-Path "$env:GITHUB_WORKSPACE\Release")) {
-            Write-Error "Release directory not found."
+          $addressTool =
+            "$env:GITHUB_WORKSPACE\Release\ModbusAddressTool\ModbusAddressTool.exe"
+
+          if (-not (Test-Path $addressTool)) {
+
+            Write-Error `
+              "ModbusAddressTool.exe was not generated."
+
+            Write-Host "Release directory:"
+
+            if (Test-Path "$env:GITHUB_WORKSPACE\Release") {
+
+              Get-ChildItem `
+                "$env:GITHUB_WORKSPACE\Release" `
+                -Recurse
+            }
+
             exit 1
           }
+
+          Write-Host ""
+          Write-Host "======================================"
+          Write-Host "ModbusAddressTool build success"
+          Write-Host "======================================"
+
+          Write-Host $addressTool
+
+
+      # ============================================================
+      # 7. Verify original programs
+      # ============================================================
+
+      - name: Inspect Release
+        shell: powershell
+        run: |
+
+          Write-Host ""
+          Write-Host "========== Release =========="
 
           Get-ChildItem `
             "$env:GITHUB_WORKSPACE\Release" `
             -Recurse |
             Select-Object FullName
 
-      # =========================
-      # 6. 安装 Inno Setup
-      # =========================
+
+      # ============================================================
+      # 8. Install Inno Setup
+      # ============================================================
+
       - name: Install Inno Setup
         shell: powershell
         run: |
-          choco install innosetup --yes --no-progress
 
-      # =========================
-      # 7. 编译安装包
-      # =========================
+          choco install innosetup `
+            --yes `
+            --no-progress
+
+
+      # ============================================================
+      # 9. Build Installer
+      # ============================================================
+
       - name: Build Installer
         shell: powershell
         run: |
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+
+          $iscc =
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
           if (-not (Test-Path $iscc)) {
-            Write-Error "Inno Setup compiler not found."
+
+            Write-Error `
+              "Inno Setup compiler not found."
+
             exit 1
           }
 
-          $iss = "$env:GITHUB_WORKSPACE\installer\ModbusTool.iss"
+          $iss =
+            "$env:GITHUB_WORKSPACE\installer\ModbusTool.iss"
 
           if (-not (Test-Path $iss)) {
-            Write-Error "ModbusTool.iss not found."
+
+            Write-Error `
+              "ModbusTool.iss not found."
+
             exit 1
           }
-
-          Write-Host "Building installer:"
-          Write-Host $iss
 
           & $iscc $iss
 
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "Inno Setup build failed."
+
+            Write-Error `
+              "Inno Setup build failed."
+
             exit $LASTEXITCODE
           }
 
-      # =========================
-      # 8. 查找 EXE 安装包
-      # =========================
+
+      # ============================================================
+      # 10. Find Installer
+      # ============================================================
+
       - name: Find Installer
         shell: powershell
         run: |
-          Write-Host "===== Installer ====="
 
-          $installer = Get-ChildItem `
-            -Path "$env:GITHUB_WORKSPACE\installer" `
-            -Filter "*.exe" `
-            -Recurse `
-            -ErrorAction SilentlyContinue
+          $installer =
+            Get-ChildItem `
+              -Path "$env:GITHUB_WORKSPACE\installer" `
+              -Filter "*.exe" `
+              -Recurse `
+              -ErrorAction SilentlyContinue
 
           if (-not $installer) {
-            Write-Error "Installer EXE was not generated."
+
+            Write-Error `
+              "Installer EXE was not generated."
+
             exit 1
           }
 
           foreach ($file in $installer) {
+
             Write-Host $file.FullName
           }
 
-      # =========================
-      # 9. 上传安装包
-      # =========================
+
+      # ============================================================
+      # 11. Upload Complete Release
+      # ============================================================
+
+      - name: Upload Release
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: ModbusTool-Release
+
+          path: |
+            Release/**
+
+
+      # ============================================================
+      # 12. Upload Installer
+      # ============================================================
+
       - name: Upload Installer
         uses: actions/upload-artifact@v4
+
         with:
+
           name: ModbusTool-Setup
+
           path: |
             installer/*.exe
