@@ -822,6 +822,7 @@ namespace ModbusAddressTool
                 Color.FromArgb(20, 74, 126);
             AddCustomDataColumn("ItemName", "项目名", 130);
             AddCustomDataColumn("ItemRegister", "寄存器地址", 90);
+            AddCustomDataColumn("ItemRegisterCount", "寄存器数", 65);
             AddCustomDataColumn("ItemCurrent", "当前值", 80);
             AddCustomDataColumn("ItemTarget", "目标值", 80);
             _customDataGrid.CellValueChanged += CustomDataGrid_CellValueChanged;
@@ -936,7 +937,9 @@ namespace ModbusAddressTool
                 return;
 
             string columnName = _customDataGrid.Columns[e.ColumnIndex].Name;
-            if (columnName == "ItemRegister" || columnName == "ItemCurrent")
+            if (columnName == "ItemRegister" ||
+                columnName == "ItemRegisterCount" ||
+                columnName == "ItemCurrent")
                 InvalidateReadValidation();
         }
 
@@ -948,6 +951,7 @@ namespace ModbusAddressTool
             _customDataGrid.Rows[row].Cells["ItemName"].Value =
                 "自定义项" + (row + 1);
             _customDataGrid.Rows[row].Cells["ItemRegister"].Value = "0000";
+            _customDataGrid.Rows[row].Cells["ItemRegisterCount"].Value = "1";
             _customDataGrid.ClearSelection();
             _customDataGrid.Rows[row].Selected = true;
             _customDataGrid.CurrentCell =
@@ -1009,6 +1013,7 @@ namespace ModbusAddressTool
                 foreach (CustomRegisterItem item in device.CustomRegisterItems)
                 {
                     text.Append('|').Append(item.RegisterAddress).Append(':')
+                        .Append(item.RegisterCount).Append(':')
                         .Append(item.CurrentValue.HasValue
                             ? item.CurrentValue.Value.ToString(
                                 CultureInfo.InvariantCulture)
@@ -1184,6 +1189,7 @@ namespace ModbusAddressTool
                 if (devices == null || devices.Count == 0)
                     throw new InvalidDataException("默认配置文件格式错误。");
 
+                NormalizeDevices(devices);
                 _devices.AddRange(devices);
                 Log(string.Format(
                     "已加载默认设备配置：{0}（{1} 台设备）",
@@ -1774,6 +1780,56 @@ namespace ModbusAddressTool
                 frame);
         }
 
+        private static byte[] BuildWrite10Frame(
+            byte address,
+            byte function,
+            ushort register,
+            uint value,
+            ushort registerCount)
+        {
+            if (registerCount < 1 || registerCount > 2)
+                throw new ArgumentOutOfRangeException("registerCount");
+
+            var frame = new List<byte>
+            {
+                address,
+                function,
+                (byte)(register >> 8),
+                (byte)(register & 0xFF),
+                (byte)(registerCount >> 8),
+                (byte)(registerCount & 0xFF),
+                (byte)(registerCount * 2)
+            };
+
+            if (registerCount == 2)
+            {
+                frame.Add((byte)(value >> 24));
+                frame.Add((byte)(value >> 16));
+            }
+
+            frame.Add((byte)(value >> 8));
+            frame.Add((byte)value);
+            return AppendCrc(frame.ToArray());
+        }
+
+        private static uint ParseRegisterValue(
+            byte[] response,
+            ushort registerCount)
+        {
+            int byteCount = registerCount * 2;
+            if (response == null ||
+                response.Length < byteCount + 5 ||
+                response[2] != byteCount)
+            {
+                throw new InvalidDataException("读取响应的寄存器数量不匹配。");
+            }
+
+            uint value = 0;
+            for (int i = 0; i < byteCount; i++)
+                value = (value << 8) | response[3 + i];
+            return value;
+        }
+
         // ============================================================
         // 发送
         // ============================================================
@@ -2265,6 +2321,8 @@ namespace ModbusAddressTool
                     "开始执行修改后验证。");
 
                 ok = VerifyNewAddress(device);
+                if (ok)
+                    ok = VerifyCustomRegisterItems(device);
             }
 
             InvalidateReadValidation();
@@ -2325,8 +2383,8 @@ namespace ModbusAddressTool
                 {
                     if (device.VerifyAfterWrite)
                     {
-                        VerifyNewAddress(
-                            device);
+                        if (VerifyNewAddress(device))
+                            VerifyCustomRegisterItems(device);
                     }
                 }
 
@@ -2424,6 +2482,60 @@ namespace ModbusAddressTool
                     "验证失败：" +
                     ex.Message);
 
+                return false;
+            }
+        }
+
+        private static void NormalizeDevices(
+            IEnumerable<DeviceProfile> devices)
+        {
+            foreach (DeviceProfile device in devices)
+            {
+                if (device.RegisterCount == 0)
+                    device.RegisterCount = 1;
+                if (device.CustomRegisterItems == null)
+                    device.CustomRegisterItems = new List<CustomRegisterItem>();
+
+                foreach (CustomRegisterItem item in device.CustomRegisterItems)
+                {
+                    if (item.RegisterCount == 0)
+                        item.RegisterCount = 1;
+                }
+            }
+        }
+
+        private bool VerifyCustomRegisterItems(DeviceProfile device)
+        {
+            if (device.CustomRegisterItems == null ||
+                !device.CustomRegisterItems.Any(item => item.TargetValue.HasValue))
+            {
+                return true;
+            }
+
+            try
+            {
+                ReadCustomRegisterItems(device);
+                CustomRegisterItem failed = device.CustomRegisterItems.FirstOrDefault(
+                    item => item.TargetValue.HasValue &&
+                        item.CurrentValue != item.TargetValue);
+                if (failed != null)
+                {
+                    throw new InvalidDataException(string.Format(
+                        "自定义项目“{0}”验证失败，期望 {1}，实际 {2}。",
+                        failed.Name,
+                        failed.TargetValue.Value,
+                        failed.CurrentValue.HasValue
+                            ? failed.CurrentValue.Value.ToString()
+                            : "未读取"));
+                }
+
+                Log("全部自定义寄存器验证成功。");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                device.MarkStatus("自定义寄存器验证失败：" + ex.Message);
+                Log("自定义寄存器验证失败：" + ex.Message);
                 return false;
             }
         }
@@ -2627,13 +2739,15 @@ namespace ModbusAddressTool
                     row.Cells["ItemName"].Value).Trim();
                 string registerText = Convert.ToString(
                     row.Cells["ItemRegister"].Value).Trim();
+                string registerCountText = Convert.ToString(
+                    row.Cells["ItemRegisterCount"].Value).Trim();
                 string currentText = Convert.ToString(
                     row.Cells["ItemCurrent"].Value).Trim();
                 string targetText = Convert.ToString(
                     row.Cells["ItemTarget"].Value).Trim();
 
                 ushort register;
-                if (!TryParseUShort(registerText, out register))
+                if (!TryParseRegisterAddress(registerText, out register))
                 {
                     MessageBox.Show(string.Format(
                         "自定义修改数据第 {0} 行的寄存器地址无效。",
@@ -2641,9 +2755,21 @@ namespace ModbusAddressTool
                     return false;
                 }
 
-                ushort current = 0;
+                ushort registerCount;
+                if (!ushort.TryParse(registerCountText, out registerCount) ||
+                    (registerCount != 1 && registerCount != 2) ||
+                    register > ushort.MaxValue - registerCount + 1)
+                {
+                    MessageBox.Show(string.Format(
+                        "自定义修改数据第 {0} 行的寄存器数必须为 1 或 2，且地址不能越界。",
+                        row.Index + 1));
+                    return false;
+                }
+
+                uint current = 0;
                 if (!string.IsNullOrWhiteSpace(currentText) &&
-                    !TryParseUShort(currentText, out current))
+                    (!TryParseUInt(currentText, out current) ||
+                     (registerCount == 1 && current > ushort.MaxValue)))
                 {
                     MessageBox.Show(string.Format(
                         "自定义修改数据第 {0} 行的当前值无效。",
@@ -2651,9 +2777,10 @@ namespace ModbusAddressTool
                     return false;
                 }
 
-                ushort target = 0;
+                uint target = 0;
                 if (!string.IsNullOrWhiteSpace(targetText) &&
-                    !TryParseUShort(targetText, out target))
+                    (!TryParseUInt(targetText, out target) ||
+                     (registerCount == 1 && target > ushort.MaxValue)))
                 {
                     MessageBox.Show(string.Format(
                         "自定义修改数据第 {0} 行的目标值无效。",
@@ -2667,11 +2794,12 @@ namespace ModbusAddressTool
                         ? "自定义项" + (row.Index + 1)
                         : name,
                     RegisterAddress = register,
+                    RegisterCount = registerCount,
                     CurrentValue = string.IsNullOrWhiteSpace(currentText)
-                        ? (ushort?)null
+                        ? (uint?)null
                         : current,
                     TargetValue = string.IsNullOrWhiteSpace(targetText)
-                        ? (ushort?)null
+                        ? (uint?)null
                         : target
                 });
             }
@@ -2841,13 +2969,21 @@ namespace ModbusAddressTool
                 _customDataGrid.Rows[row].Cells["ItemName"].Value = item.Name;
                 _customDataGrid.Rows[row].Cells["ItemRegister"].Value =
                     "0x" + item.RegisterAddress.ToString("X4");
+                if (item.RegisterCount == 0)
+                    item.RegisterCount = 1;
+                _customDataGrid.Rows[row].Cells["ItemRegisterCount"].Value =
+                    item.RegisterCount.ToString(CultureInfo.InvariantCulture);
                 _customDataGrid.Rows[row].Cells["ItemCurrent"].Value =
                     item.CurrentValue.HasValue
-                        ? FormatValue(item.CurrentValue.Value)
+                        ? FormatRegisterValue(
+                            item.CurrentValue.Value,
+                            item.RegisterCount)
                         : "";
                 _customDataGrid.Rows[row].Cells["ItemTarget"].Value =
                     item.TargetValue.HasValue
-                        ? FormatValue(item.TargetValue.Value)
+                        ? FormatRegisterValue(
+                            item.TargetValue.Value,
+                            item.RegisterCount)
                         : "";
             }
             }
@@ -2865,26 +3001,30 @@ namespace ModbusAddressTool
 
             foreach (CustomRegisterItem item in device.CustomRegisterItems)
             {
+                ushort registerCount = item.RegisterCount == 0
+                    ? (ushort)1
+                    : item.RegisterCount;
                 byte[] frame = BuildReadFrame(
                     device.CurrentAddress,
                     device.ReadFunctionCode,
                     item.RegisterAddress,
-                    1);
-                byte[] response = SendFrame(frame, 7, device);
+                    registerCount);
+                byte[] response = SendFrame(
+                    frame,
+                    5 + registerCount * 2,
+                    device);
                 ValidateStandardResponse(
                     response,
                     device.CurrentAddress,
                     device.ReadFunctionCode);
-                if (response[2] < 2)
-                    throw new InvalidDataException(
-                        "自定义项目“" + item.Name + "”读取响应长度不足。");
-
-                item.CurrentValue = (ushort)(
-                    (response[3] << 8) | response[4]);
+                item.CurrentValue = ParseRegisterValue(
+                    response,
+                    registerCount);
                 Log(string.Format(
-                    "自定义项目读取：{0}，寄存器=0x{1:X4}，当前值={2}",
+                    "自定义项目读取：{0}，寄存器=0x{1:X4}，数量={2}，当前值={3}",
                     item.Name,
                     item.RegisterAddress,
+                    registerCount,
                     item.CurrentValue.Value));
             }
         }
@@ -2905,32 +3045,40 @@ namespace ModbusAddressTool
                 }
 
                 byte[] frame;
-                if (device.WriteFunctionCode == 16)
+                ushort registerCount = item.RegisterCount == 0
+                    ? (ushort)1
+                    : item.RegisterCount;
+                byte writeFunction = registerCount == 2
+                    ? (byte)16
+                    : device.WriteFunctionCode;
+                if (writeFunction == 16)
                 {
                     frame = BuildWrite10Frame(
                         device.CurrentAddress,
-                        device.WriteFunctionCode,
+                        writeFunction,
                         item.RegisterAddress,
-                        item.TargetValue.Value);
+                        item.TargetValue.Value,
+                        registerCount);
                 }
                 else
                 {
                     frame = BuildWrite06Frame(
                         device.CurrentAddress,
-                        device.WriteFunctionCode,
+                        writeFunction,
                         item.RegisterAddress,
-                        item.TargetValue.Value);
+                        (ushort)item.TargetValue.Value);
                 }
 
                 byte[] response = SendFrame(frame, 8, device);
                 ValidateStandardResponse(
                     response,
                     device.CurrentAddress,
-                    device.WriteFunctionCode);
+                    writeFunction);
                 Log(string.Format(
-                    "自定义项目修改：{0}，寄存器=0x{1:X4}，{2} → {3}",
+                    "自定义项目修改：{0}，寄存器=0x{1:X4}，数量={2}，{3} → {4}",
                     item.Name,
                     item.RegisterAddress,
+                    registerCount,
                     item.CurrentValue.HasValue
                         ? item.CurrentValue.Value.ToString()
                         : "未知",
@@ -3157,6 +3305,7 @@ namespace ModbusAddressTool
                         throw new Exception(
                             "配置文件格式错误。");
 
+                    NormalizeDevices(result);
                     _devices.Clear();
 
                     _devices.AddRange(
@@ -3272,6 +3421,26 @@ namespace ModbusAddressTool
             }
         }
 
+        private string FormatRegisterValue(
+            uint value,
+            ushort registerCount)
+        {
+            switch (_displayFormat)
+            {
+                case DisplayFormat.Hex:
+                    return "0x" + value.ToString(
+                        registerCount == 2 ? "X8" : "X4");
+
+                case DisplayFormat.Binary:
+                    return Convert.ToString((long)value, 2).PadLeft(
+                        registerCount == 2 ? 32 : 16,
+                        '0');
+
+                default:
+                    return value.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
         // ============================================================
         // 输入解析
         // ============================================================
@@ -3383,6 +3552,58 @@ namespace ModbusAddressTool
             }
 
             return ushort.TryParse(
+                text,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        private static bool TryParseUInt(
+            string text,
+            out uint value)
+        {
+            value = 0;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            text = text.Trim();
+            if ((text.Length == 16 || text.Length == 32) &&
+                text.All(c => c == '0' || c == '1'))
+            {
+                try
+                {
+                    value = Convert.ToUInt32(text, 2);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            if (text.StartsWith(
+                "0x",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return uint.TryParse(
+                    text.Substring(2),
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out value);
+            }
+
+            if (text.Any(c =>
+                (c >= 'A' && c <= 'F') ||
+                (c >= 'a' && c <= 'f')))
+            {
+                return uint.TryParse(
+                    text,
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out value);
+            }
+
+            return uint.TryParse(
                 text,
                 NumberStyles.Integer,
                 CultureInfo.InvariantCulture,
