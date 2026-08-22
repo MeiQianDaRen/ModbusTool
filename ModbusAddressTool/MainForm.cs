@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.IO.Ports;
@@ -19,6 +20,8 @@ namespace ModbusAddressTool
             new List<DeviceProfile>();
 
         private DataGridView _grid;
+
+        private TableLayoutPanel _rootLayout;
 
         private ComboBox _cmbPort;
         private ComboBox _cmbBaud;
@@ -103,23 +106,34 @@ namespace ModbusAddressTool
 
         private void InitializeForm()
         {
-            Text =
-                "Modbus RTU RS485 地址修改工具";
-
-            Width = 1400;
-
+            Text = "Modbus RTU RS485 地址修改工具";
+            Width = 1440;
             Height = 900;
+            MinimumSize = new Size(1100, 720);
+            StartPosition = FormStartPosition.CenterScreen;
+            AutoScaleMode = AutoScaleMode.Dpi;
+            Font = new Font("Microsoft YaHei UI", 9F);
+            BackColor = Color.FromArgb(244, 247, 250);
+            ForeColor = Color.FromArgb(36, 45, 54);
+            FormClosing += MainForm_FormClosing;
 
-            MinimumSize =
-                new System.Drawing.Size(
-                    1100,
-                    700);
-
-            StartPosition =
-                FormStartPosition.CenterScreen;
-
-            FormClosing +=
-                MainForm_FormClosing;
+            _rootLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                Padding = new Padding(14),
+                BackColor = BackColor
+            };
+            _rootLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100F));
+            _rootLayout.RowStyles.Add(
+                new RowStyle(SizeType.Absolute, 106F));
+            _rootLayout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100F));
+            _rootLayout.RowStyles.Add(
+                new RowStyle(SizeType.Absolute, 184F));
+            Controls.Add(_rootLayout);
         }
 
         // ============================================================
@@ -128,280 +142,78 @@ namespace ModbusAddressTool
 
         private void InitializeSerialPanel()
         {
-            var panel =
-                new TableLayoutPanel();
+            var group = CreateSection("串口通讯");
+            group.Margin = new Padding(0, 0, 0, 10);
 
-            panel.Dock =
-                DockStyle.Top;
-
-            panel.Height =
-                105;
-
-            panel.Padding =
-                new Padding(8);
-
-            panel.ColumnCount = 12;
-
-            panel.RowCount = 2;
-
-            for (int i = 0; i < 12; i++)
+            var panel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 15,
+                RowCount = 1,
+                Padding = new Padding(10, 8, 10, 8)
+            };
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            float[] widths =
+            {
+                42, 100, 68, 12, 54, 90, 54, 82,
+                48, 58, 48, 58, 100, 90, 84
+            };
+            for (int i = 0; i < widths.Length; i++)
             {
                 panel.ColumnStyles.Add(
-                    new ColumnStyle(
-                        SizeType.Percent,
-                        8.333f));
+                    i == 12
+                        ? new ColumnStyle(SizeType.Percent, 100F)
+                        : new ColumnStyle(SizeType.Absolute, widths[i]));
             }
 
-            Controls.Add(panel);
+            AddLabel(panel, "串口", 0, 0);
+            _cmbPort = CreateDropDown();
+            panel.Controls.Add(_cmbPort, 1, 0);
 
-            AddLabel(
-                panel,
-                "串口",
-                0,
-                0);
+            _btnRefresh = CreateButton("刷新", delegate { RefreshPorts(); });
+            _btnRefresh.Dock = DockStyle.Fill;
+            panel.Controls.Add(_btnRefresh, 2, 0);
 
-            _cmbPort =
-                new ComboBox();
+            AddLabel(panel, "波特率", 4, 0);
+            _cmbBaud = CreateDropDown();
+            _cmbBaud.Items.AddRange(new object[]
+            {
+                "1200", "2400", "4800", "9600", "19200",
+                "38400", "57600", "115200"
+            });
+            _cmbBaud.SelectedItem = "9600";
+            panel.Controls.Add(_cmbBaud, 5, 0);
 
-            _cmbPort.Dock =
-                DockStyle.Fill;
-
-            _cmbPort.DropDownStyle =
-                ComboBoxStyle.DropDownList;
-
-            panel.Controls.Add(
-                _cmbPort,
-                1,
-                0);
-
-            _btnRefresh =
-                new Button();
-
-            _btnRefresh.Text =
-                "刷新";
-
-            _btnRefresh.Dock =
-                DockStyle.Fill;
-
-            _btnRefresh.Click +=
-                delegate
-                {
-                    RefreshPorts();
-                };
-
-            panel.Controls.Add(
-                _btnRefresh,
-                2,
-                0);
-
-            AddLabel(
-                panel,
-                "波特率",
-                3,
-                0);
-
-            _cmbBaud =
-                new ComboBox();
-
-            _cmbBaud.Dock =
-                DockStyle.Fill;
-
-            _cmbBaud.DropDownStyle =
-                ComboBoxStyle.DropDownList;
-
-            _cmbBaud.Items.AddRange(
-                new object[]
-                {
-                    "1200",
-                    "2400",
-                    "4800",
-                    "9600",
-                    "19200",
-                    "38400",
-                    "57600",
-                    "115200"
-                });
-
-            _cmbBaud.SelectedItem =
-                "9600";
-
-            panel.Controls.Add(
-                _cmbBaud,
-                4,
-                0);
-
-            AddLabel(
-                panel,
-                "校验位",
-                5,
-                0);
-
-            _cmbParity =
-                new ComboBox();
-
-            _cmbParity.Dock =
-                DockStyle.Fill;
-
-            _cmbParity.DropDownStyle =
-                ComboBoxStyle.DropDownList;
-
+            AddLabel(panel, "校验位", 6, 0);
+            _cmbParity = CreateDropDown();
             _cmbParity.Items.AddRange(
-                new object[]
-                {
-                    "None",
-                    "Even",
-                    "Odd",
-                    "Mark",
-                    "Space"
-                });
+                new object[] { "None", "Even", "Odd", "Mark", "Space" });
+            _cmbParity.SelectedItem = "None";
+            panel.Controls.Add(_cmbParity, 7, 0);
 
-            _cmbParity.SelectedItem =
-                "None";
+            AddLabel(panel, "数据位", 8, 0);
+            _cmbDataBits = CreateDropDown();
+            _cmbDataBits.Items.AddRange(new object[] { "8", "7" });
+            _cmbDataBits.SelectedItem = "8";
+            panel.Controls.Add(_cmbDataBits, 9, 0);
 
-            panel.Controls.Add(
-                _cmbParity,
-                6,
-                0);
+            AddLabel(panel, "停止位", 10, 0);
+            _cmbStopBits = CreateDropDown();
+            _cmbStopBits.Items.AddRange(new object[] { "1", "1.5", "2" });
+            _cmbStopBits.SelectedItem = "1";
+            panel.Controls.Add(_cmbStopBits, 11, 0);
 
-            AddLabel(
-                panel,
-                "数据位",
-                7,
-                0);
+            _btnConnect = CreateButton("连接", Connect);
+            SetAccentButton(_btnConnect, Color.FromArgb(32, 123, 229));
+            _btnConnect.Dock = DockStyle.Fill;
+            panel.Controls.Add(_btnConnect, 13, 0);
 
-            _cmbDataBits =
-                new ComboBox();
+            _btnDisconnect = CreateButton("断开", Disconnect);
+            _btnDisconnect.Dock = DockStyle.Fill;
+            panel.Controls.Add(_btnDisconnect, 14, 0);
 
-            _cmbDataBits.Dock =
-                DockStyle.Fill;
-
-            _cmbDataBits.DropDownStyle =
-                ComboBoxStyle.DropDownList;
-
-            _cmbDataBits.Items.AddRange(
-                new object[]
-                {
-                    "8",
-                    "7"
-                });
-
-            _cmbDataBits.SelectedItem =
-                "8";
-
-            panel.Controls.Add(
-                _cmbDataBits,
-                8,
-                0);
-
-            AddLabel(
-                panel,
-                "停止位",
-                9,
-                0);
-
-            _cmbStopBits =
-                new ComboBox();
-
-            _cmbStopBits.Dock =
-                DockStyle.Fill;
-
-            _cmbStopBits.DropDownStyle =
-                ComboBoxStyle.DropDownList;
-
-            _cmbStopBits.Items.AddRange(
-                new object[]
-                {
-                    "1",
-                    "1.5",
-                    "2"
-                });
-
-            _cmbStopBits.SelectedItem =
-                "1";
-
-            panel.Controls.Add(
-                _cmbStopBits,
-                10,
-                0);
-
-            var buttons =
-                new FlowLayoutPanel();
-
-            buttons.Dock =
-                DockStyle.Fill;
-
-            _btnConnect =
-                CreateButton(
-                    "连接",
-                    Connect);
-
-            _btnDisconnect =
-                CreateButton(
-                    "断开",
-                    Disconnect);
-
-            buttons.Controls.Add(
-                _btnConnect);
-
-            buttons.Controls.Add(
-                _btnDisconnect);
-
-            panel.Controls.Add(
-                buttons,
-                11,
-                0);
-
-            // 第二行
-            AddLabel(
-                panel,
-                "读取功能码",
-                0,
-                1);
-
-            _cmbReadFunction =
-                CreateFunctionCombo(
-                    "03");
-
-            panel.Controls.Add(
-                _cmbReadFunction,
-                1,
-                1);
-
-            AddLabel(
-                panel,
-                "写入功能码",
-                2,
-                1);
-
-            _cmbWriteFunction =
-                CreateFunctionCombo(
-                    "06");
-
-            panel.Controls.Add(
-                _cmbWriteFunction,
-                3,
-                1);
-
-            var info =
-                new Label();
-
-            info.Text =
-                "功能码可直接输入十进制/十六进制";
-
-            info.Dock =
-                DockStyle.Fill;
-
-            info.TextAlign =
-                System.Drawing.ContentAlignment.MiddleLeft;
-
-            panel.Controls.Add(
-                info,
-                4,
-                1);
-
-            panel.SetColumnSpan(
-                info,
-                5);
+            group.Controls.Add(panel);
+            _rootLayout.Controls.Add(group, 0, 0);
         }
 
         private ComboBox CreateFunctionCombo(
@@ -455,502 +267,361 @@ namespace ModbusAddressTool
                 row);
         }
 
+        private ComboBox CreateDropDown()
+        {
+            return new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Margin = new Padding(3, 7, 3, 5)
+            };
+        }
+
+        private GroupBox CreateSection(string title)
+        {
+            return new GroupBox
+            {
+                Text = title,
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(50, 61, 72),
+                Font = Font,
+                Padding = new Padding(8)
+            };
+        }
+
+        private void SetAccentButton(Button button, Color color)
+        {
+            button.BackColor = color;
+            button.ForeColor = Color.White;
+            button.FlatAppearance.BorderColor = color;
+            button.FlatAppearance.MouseOverBackColor = ControlPaint.Light(color, 0.08F);
+        }
+
+        private RadioButton CreateDisplayRadio(string text, bool isChecked)
+        {
+            return new RadioButton
+            {
+                Text = text,
+                Checked = isChecked,
+                AutoSize = true,
+                Margin = new Padding(7, 0, 0, 0)
+            };
+        }
+
+        private void AddFormLabel(
+            TableLayoutPanel panel,
+            string text,
+            int column,
+            int row)
+        {
+            panel.Controls.Add(new Label
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = Color.FromArgb(72, 83, 95),
+                Font = Font,
+                Margin = new Padding(0)
+            }, column, row);
+        }
+
+        private TextBox CreateFrameTextBox()
+        {
+            return new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Font = new Font("Consolas", 10F),
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(4, 4, 4, 3)
+            };
+        }
+
         // ============================================================
         // 主设备区域
         // ============================================================
 
         private void InitializeDevicePanel()
         {
-            var main =
-                new TableLayoutPanel();
-
-            main.Dock =
-                DockStyle.Fill;
-
-            main.ColumnCount = 1;
-
-            main.RowCount = 5;
-
-            main.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Absolute,
-                    42));
-
-            main.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Absolute,
-                    145));
-
-            main.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Absolute,
-                    120));
-
-            main.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Absolute,
-                    50));
-
-            main.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Percent,
-                    100));
-
-            Controls.Add(main);
-
-            // ========================================================
-            // 设备列表
-            // ========================================================
-
-            _grid =
-                new DataGridView();
-
-            _grid.Dock =
-                DockStyle.Fill;
-
-            _grid.AllowUserToAddRows =
-                false;
-
-            _grid.AllowUserToDeleteRows =
-                false;
-
-            _grid.MultiSelect =
-                false;
-
-            _grid.SelectionMode =
-                DataGridViewSelectionMode.FullRowSelect;
-
-            _grid.AutoGenerateColumns =
-                false;
-
-            AddColumn(
-                "Name",
-                "名称",
-                130);
-
-            AddColumn(
-                "ReadFunction",
-                "读取功能码",
-                90);
-
-            AddColumn(
-                "WriteFunction",
-                "写入功能码",
-                90);
-
-            AddColumn(
-                "Register",
-                "寄存器",
-                90);
-
-            AddColumn(
-                "Current",
-                "当前地址",
-                90);
-
-            AddColumn(
-                "New",
-                "修改地址",
-                90);
-
-            AddColumn(
-                "Custom",
-                "自定义帧",
-                90);
-
-            AddColumn(
-                "Status",
-                "状态",
-                260);
-
-            _grid.SelectionChanged +=
-                Grid_SelectionChanged;
-
-            main.Controls.Add(
-                _grid,
-                0,
-                0);
-
-            // ========================================================
-            // 编辑
-            // ========================================================
-
-            var editor =
-                new FlowLayoutPanel();
-
-            editor.Dock =
-                DockStyle.Fill;
-
-            editor.Padding =
-                new Padding(8);
-
-            editor.WrapContents =
-                false;
-
-            AddEditorLabel(
-                editor,
-                "名称");
-
-            _txtName =
-                CreateTextBox(130);
-
-            editor.Controls.Add(
-                _txtName);
-
-            AddEditorLabel(
-                editor,
-                "寄存器");
-
-            _txtRegister =
-                CreateTextBox(90);
-
-            editor.Controls.Add(
-                _txtRegister);
-
-            AddEditorLabel(
-                editor,
-                "当前地址");
-
-            _txtCurrentAddress =
-                CreateTextBox(70);
-
-            editor.Controls.Add(
-                _txtCurrentAddress);
-
-            AddEditorLabel(
-                editor,
-                "修改地址");
-
-            _txtNewAddress =
-                CreateTextBox(70);
-
-            editor.Controls.Add(
-                _txtNewAddress);
-
-            main.Controls.Add(
-                editor,
-                0,
-                1);
-
-            // ========================================================
-            // 自定义数据帧
-            // ========================================================
-
-            var framePanel =
-                new TableLayoutPanel();
-
-            framePanel.Dock =
-                DockStyle.Fill;
-
-            framePanel.Padding =
-                new Padding(8);
-
-            framePanel.ColumnCount =
-                4;
-
-            framePanel.RowCount =
-                3;
-
-            framePanel.ColumnStyles.Add(
-                new ColumnStyle(
-                    SizeType.Absolute,
-                    130));
-
-            framePanel.ColumnStyles.Add(
-                new ColumnStyle(
-                    SizeType.Percent,
-                    50));
-
-            framePanel.ColumnStyles.Add(
-                new ColumnStyle(
-                    SizeType.Absolute,
-                    130));
-
-            framePanel.ColumnStyles.Add(
-                new ColumnStyle(
-                    SizeType.Percent,
-                    50));
-
-            framePanel.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Percent,
-                    33));
-
-            framePanel.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Percent,
-                    33));
-
-            framePanel.RowStyles.Add(
-                new RowStyle(
-                    SizeType.Percent,
-                    34));
-
-            framePanel.Controls.Add(
-                new Label
-                {
-                    Text = "自定义读取帧",
-                    Dock = DockStyle.Fill,
-                    TextAlign =
-                        System.Drawing.ContentAlignment.MiddleLeft
-                },
-                0,
-                0);
-
-            _txtCustomReadFrame =
-                new TextBox();
-
-            _txtCustomReadFrame.Dock =
-                DockStyle.Fill;
-
-            _txtCustomReadFrame.Font =
-                new System.Drawing.Font(
-                    "Consolas",
-                    10);
-
-            framePanel.Controls.Add(
-                _txtCustomReadFrame,
-                1,
-                0);
-
-            framePanel.Controls.Add(
-                new Label
-                {
-                    Text = "自定义修改帧",
-                    Dock = DockStyle.Fill,
-                    TextAlign =
-                        System.Drawing.ContentAlignment.MiddleLeft
-                },
-                2,
-                0);
-
-            _txtCustomWriteFrame =
-                new TextBox();
-
-            _txtCustomWriteFrame.Dock =
-                DockStyle.Fill;
-
-            _txtCustomWriteFrame.Font =
-                new System.Drawing.Font(
-                    "Consolas",
-                    10);
-
-            framePanel.Controls.Add(
-                _txtCustomWriteFrame,
-                3,
-                0);
-
-            _chkCustomWriteFrame =
-                new CheckBox();
-
-            _chkCustomWriteFrame.Text =
-                "启用自定义修改帧（填写后完全按厂家数据发送）";
-
-            _chkCustomWriteFrame.Dock =
-                DockStyle.Fill;
-
-            framePanel.Controls.Add(
-                _chkCustomWriteFrame,
-                0,
-                1);
-
-            framePanel.SetColumnSpan(
-                _chkCustomWriteFrame,
-                2);
-
-            _chkAutoCrc =
-                new CheckBox();
-
-            _chkAutoCrc.Text =
-                "自动追加 Modbus CRC16";
-
-            _chkAutoCrc.Checked =
-                true;
-
-            _chkAutoCrc.Dock =
-                DockStyle.Fill;
-
-            framePanel.Controls.Add(
-                _chkAutoCrc,
-                2,
-                1);
-
-            _chkVerify =
-                new CheckBox();
-
-            _chkVerify.Text =
-                "修改后自动验证";
-
-            _chkVerify.Checked =
-                true;
-
-            _chkVerify.Dock =
-                DockStyle.Fill;
-
-            framePanel.Controls.Add(
-                _chkVerify,
-                3,
-                1);
-
-            var hint =
-                new Label();
-
-            hint.Text =
-                "数据帧示例：01 41 00 D0 02    |    已含CRC时取消“自动追加CRC”";
-
-            hint.Dock =
-                DockStyle.Fill;
-
-            hint.TextAlign =
-                System.Drawing.ContentAlignment.MiddleLeft;
-
-            framePanel.Controls.Add(
-                hint,
-                0,
-                2);
-
-            framePanel.SetColumnSpan(
-                hint,
-                4);
-
-            main.Controls.Add(
-                framePanel,
-                0,
-                2);
-
-            // ========================================================
-            // 按钮
-            // ========================================================
-
-            var buttons =
-                new FlowLayoutPanel();
-
-            buttons.Dock =
-                DockStyle.Fill;
-
-            buttons.Padding =
-                new Padding(8);
-
-            _btnAdd =
-                CreateButton(
-                    "添加设备",
-                    AddDevice);
-
-            _btnDelete =
-                CreateButton(
-                    "删除设备",
-                    DeleteDevice);
-
-            _btnRead =
-                CreateButton(
-                    "读取当前地址",
-                    ReadSelectedDevice);
-
-            _btnWrite =
-                CreateButton(
-                    "修改地址",
-                    WriteSelectedDevice);
-
-            _btnReadAll =
-                CreateButton(
-                    "读取全部",
-                    ReadAllDevices);
-
-            _btnWriteAll =
-                CreateButton(
-                    "修改全部",
-                    WriteAllDevices);
-
-            _btnImport =
-                CreateButton(
-                    "导入",
-                    ImportDevices);
-
-            _btnExport =
-                CreateButton(
-                    "导出",
-                    ExportDevices);
-
-            buttons.Controls.Add(_btnAdd);
-            buttons.Controls.Add(_btnDelete);
-            buttons.Controls.Add(_btnRead);
-            buttons.Controls.Add(_btnWrite);
-            buttons.Controls.Add(_btnReadAll);
-            buttons.Controls.Add(_btnWriteAll);
-            buttons.Controls.Add(_btnImport);
-            buttons.Controls.Add(_btnExport);
-
-            main.Controls.Add(
-                buttons,
-                0,
-                3);
-
-            // ========================================================
-            // 数据显示
-            // ========================================================
-
-            var display =
-                new FlowLayoutPanel();
-
-            display.Dock =
-                DockStyle.Fill;
-
-            display.Padding =
-                new Padding(8);
-
-            display.Controls.Add(
-                new Label
-                {
-                    Text = "数据显示格式：",
-                    AutoSize = true,
-                    Padding =
-                        new Padding(0, 6, 8, 0)
-                });
-
-            _radioInteger =
-                new RadioButton
-                {
-                    Text = "整数",
-                    Checked = true,
-                    AutoSize = true
-                };
-
-            _radioHex =
-                new RadioButton
-                {
-                    Text = "十六进制",
-                    AutoSize = true
-                };
-
-            _radioBinary =
-                new RadioButton
-                {
-                    Text = "二进制",
-                    AutoSize = true
-                };
-
-            _radioInteger.CheckedChanged +=
-                DisplayFormatChanged;
-
-            _radioHex.CheckedChanged +=
-                DisplayFormatChanged;
-
-            _radioBinary.CheckedChanged +=
-                DisplayFormatChanged;
-
-            display.Controls.Add(
-                _radioInteger);
-
-            display.Controls.Add(
-                _radioHex);
-
-            display.Controls.Add(
-                _radioBinary);
-
-            main.Controls.Add(
-                display,
-                0,
-                4);
+            var split = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                Size = new Size(1200, 500),
+                SplitterDistance = 690,
+                SplitterWidth = 10,
+                Panel1MinSize = 500,
+                Panel2MinSize = 410,
+                BackColor = BackColor,
+                Margin = new Padding(0)
+            };
+
+            var listGroup = CreateSection("设备列表");
+            listGroup.Dock = DockStyle.Fill;
+            listGroup.Margin = new Padding(0, 0, 5, 0);
+
+            var listLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(8, 4, 8, 8)
+            };
+            listLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            listLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var toolbar = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0)
+            };
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62F));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38F));
+
+            var fileButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            _btnAdd = CreateButton("＋ 添加", AddDevice);
+            SetAccentButton(_btnAdd, Color.FromArgb(32, 123, 229));
+            _btnDelete = CreateButton("删除", DeleteDevice);
+            SetAccentButton(_btnDelete, Color.FromArgb(214, 69, 65));
+            _btnImport = CreateButton("导入", ImportDevices);
+            _btnExport = CreateButton("导出", ExportDevices);
+            fileButtons.Controls.Add(_btnAdd);
+            fileButtons.Controls.Add(_btnDelete);
+            fileButtons.Controls.Add(_btnImport);
+            fileButtons.Controls.Add(_btnExport);
+            toolbar.Controls.Add(fileButtons, 0, 0);
+
+            var display = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                Margin = new Padding(0),
+                Padding = new Padding(0, 7, 0, 0)
+            };
+            _radioInteger = CreateDisplayRadio("整数", true);
+            _radioHex = CreateDisplayRadio("十六进制", false);
+            _radioBinary = CreateDisplayRadio("二进制", false);
+            _radioInteger.CheckedChanged += DisplayFormatChanged;
+            _radioHex.CheckedChanged += DisplayFormatChanged;
+            _radioBinary.CheckedChanged += DisplayFormatChanged;
+            display.Controls.Add(_radioBinary);
+            display.Controls.Add(_radioHex);
+            display.Controls.Add(_radioInteger);
+            display.Controls.Add(new Label
+            {
+                Text = "显示：",
+                AutoSize = true,
+                Padding = new Padding(0, 3, 2, 0),
+                ForeColor = Color.FromArgb(92, 103, 115)
+            });
+            toolbar.Controls.Add(display, 1, 0);
+            listLayout.Controls.Add(toolbar, 0, 0);
+
+            _grid = new DataGridView
+            {
+                Dock = DockStyle.Fill,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                MultiSelect = false,
+                ReadOnly = true,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                AutoGenerateColumns = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                RowHeadersVisible = false,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.None,
+                GridColor = Color.FromArgb(226, 232, 238),
+                EnableHeadersVisualStyles = false,
+                ColumnHeadersHeight = 36,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing
+            };
+            _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(236, 241, 246);
+            _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(50, 61, 72);
+            _grid.ColumnHeadersDefaultCellStyle.Font = new Font(Font, FontStyle.Bold);
+            _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor =
+                _grid.ColumnHeadersDefaultCellStyle.BackColor;
+            _grid.DefaultCellStyle.BackColor = Color.White;
+            _grid.DefaultCellStyle.ForeColor = ForeColor;
+            _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(218, 235, 252);
+            _grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(20, 74, 126);
+            _grid.DefaultCellStyle.Padding = new Padding(4, 0, 4, 0);
+            _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
+            _grid.RowTemplate.Height = 34;
+            AddColumn("Name", "设备名称", 125);
+            AddColumn("Current", "当前地址", 75);
+            AddColumn("New", "目标地址", 75);
+            AddColumn("Register", "寄存器", 82);
+            AddColumn("Status", "最近状态", 210);
+            _grid.SelectionChanged += Grid_SelectionChanged;
+            listLayout.Controls.Add(_grid, 0, 1);
+            listGroup.Controls.Add(listLayout);
+            split.Panel1.Controls.Add(listGroup);
+
+            var editorGroup = CreateSection("设备参数");
+            editorGroup.Dock = DockStyle.Fill;
+            editorGroup.Margin = new Padding(5, 0, 0, 0);
+
+            var editorLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                Padding = new Padding(10, 5, 10, 10)
+            };
+            editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+            editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 184F));
+            editorLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var basics = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 4,
+                RowCount = 4,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            basics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74F));
+            basics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            basics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78F));
+            basics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            for (int i = 0; i < 4; i++)
+                basics.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+
+            AddFormLabel(basics, "名称", 0, 0);
+            _txtName = CreateTextBox(0);
+            _txtName.Dock = DockStyle.Fill;
+            basics.Controls.Add(_txtName, 1, 0);
+            basics.SetColumnSpan(_txtName, 3);
+
+            AddFormLabel(basics, "寄存器", 0, 1);
+            _txtRegister = CreateTextBox(0);
+            _txtRegister.Dock = DockStyle.Fill;
+            basics.Controls.Add(_txtRegister, 1, 1);
+            AddFormLabel(basics, "当前地址", 2, 1);
+            _txtCurrentAddress = CreateTextBox(0);
+            _txtCurrentAddress.Dock = DockStyle.Fill;
+            basics.Controls.Add(_txtCurrentAddress, 3, 1);
+
+            AddFormLabel(basics, "目标地址", 0, 2);
+            _txtNewAddress = CreateTextBox(0);
+            _txtNewAddress.Dock = DockStyle.Fill;
+            basics.Controls.Add(_txtNewAddress, 1, 2);
+            AddFormLabel(basics, "读取功能码", 2, 2);
+            _cmbReadFunction = CreateFunctionCombo("03");
+            _cmbReadFunction.Dock = DockStyle.Fill;
+            basics.Controls.Add(_cmbReadFunction, 3, 2);
+
+            AddFormLabel(basics, "写入功能码", 0, 3);
+            _cmbWriteFunction = CreateFunctionCombo("06");
+            _cmbWriteFunction.Dock = DockStyle.Fill;
+            basics.Controls.Add(_cmbWriteFunction, 1, 3);
+            basics.Controls.Add(new Label
+            {
+                Text = "支持十进制或十六进制",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.FromArgb(112, 123, 135),
+                Margin = new Padding(7, 0, 0, 0)
+            }, 2, 3);
+            basics.SetColumnSpan(basics.GetControlFromPosition(2, 3), 2);
+            editorLayout.Controls.Add(basics, 0, 0);
+
+            var frameGroup = CreateSection("自定义数据帧");
+            frameGroup.Margin = new Padding(0, 0, 0, 8);
+            var framePanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 4,
+                Padding = new Padding(8, 5, 8, 5)
+            };
+            framePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96F));
+            framePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            framePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            AddFormLabel(framePanel, "读取帧", 0, 0);
+            _txtCustomReadFrame = CreateFrameTextBox();
+            framePanel.Controls.Add(_txtCustomReadFrame, 1, 0);
+            AddFormLabel(framePanel, "修改帧", 0, 1);
+            _txtCustomWriteFrame = CreateFrameTextBox();
+            framePanel.Controls.Add(_txtCustomWriteFrame, 1, 1);
+
+            var checks = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            _chkCustomWriteFrame = new CheckBox
+            {
+                Text = "启用自定义修改帧",
+                AutoSize = true,
+                Margin = new Padding(3, 8, 14, 0)
+            };
+            _chkAutoCrc = new CheckBox
+            {
+                Text = "自动追加 CRC16",
+                Checked = true,
+                AutoSize = true,
+                Margin = new Padding(3, 8, 14, 0)
+            };
+            _chkVerify = new CheckBox
+            {
+                Text = "修改后验证",
+                Checked = true,
+                AutoSize = true,
+                Margin = new Padding(3, 8, 0, 0)
+            };
+            checks.Controls.Add(_chkCustomWriteFrame);
+            checks.Controls.Add(_chkAutoCrc);
+            checks.Controls.Add(_chkVerify);
+            framePanel.Controls.Add(checks, 0, 2);
+            framePanel.SetColumnSpan(checks, 2);
+            var hint = new Label
+            {
+                Text = "示例：01 41 00 D0 02；数据中已包含 CRC 时请关闭自动追加。",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.FromArgb(112, 123, 135),
+                Padding = new Padding(3, 0, 0, 0)
+            };
+            framePanel.Controls.Add(hint, 0, 3);
+            framePanel.SetColumnSpan(hint, 2);
+            frameGroup.Controls.Add(framePanel);
+            editorLayout.Controls.Add(frameGroup, 0, 1);
+
+            var actions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = true,
+                Padding = new Padding(0, 8, 0, 0),
+                Margin = new Padding(0)
+            };
+            _btnRead = CreateButton("读取当前设备", ReadSelectedDevice);
+            _btnWrite = CreateButton("修改当前设备", WriteSelectedDevice);
+            SetAccentButton(_btnWrite, Color.FromArgb(32, 123, 229));
+            _btnReadAll = CreateButton("读取全部", ReadAllDevices);
+            _btnWriteAll = CreateButton("修改全部", WriteAllDevices);
+            actions.Controls.Add(_btnRead);
+            actions.Controls.Add(_btnWrite);
+            actions.Controls.Add(_btnReadAll);
+            actions.Controls.Add(_btnWriteAll);
+            editorLayout.Controls.Add(actions, 0, 2);
+
+            editorGroup.Controls.Add(editorLayout);
+            split.Panel2.Controls.Add(editorGroup);
+            _rootLayout.Controls.Add(split, 0, 1);
         }
 
         private void AddColumn(
@@ -967,7 +638,10 @@ namespace ModbusAddressTool
             column.HeaderText =
                 header;
 
-            column.Width =
+            column.MinimumWidth =
+                Math.Min(width, 70);
+
+            column.FillWeight =
                 width;
 
             column.ReadOnly =
@@ -998,7 +672,9 @@ namespace ModbusAddressTool
             return new TextBox
             {
                 Width = width,
-                Height = 25
+                Height = 27,
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(4, 4, 4, 3)
             };
         }
 
@@ -1013,10 +689,31 @@ namespace ModbusAddressTool
                 text;
 
             button.Width =
-                110;
+                94;
 
             button.Height =
                 32;
+
+            button.FlatStyle =
+                FlatStyle.Flat;
+
+            button.BackColor =
+                Color.FromArgb(239, 243, 247);
+
+            button.ForeColor =
+                Color.FromArgb(50, 61, 72);
+
+            button.FlatAppearance.BorderColor =
+                Color.FromArgb(207, 216, 225);
+
+            button.Margin =
+                new Padding(3, 3, 3, 3);
+
+            button.Cursor =
+                Cursors.Hand;
+
+            button.Font =
+                Font;
 
             button.Click +=
                 handler;
@@ -1030,40 +727,22 @@ namespace ModbusAddressTool
 
         private void InitializeLogPanel()
         {
-            var group =
-                new GroupBox();
+            var group = CreateSection("通讯日志 / 调试信息");
+            group.Margin = new Padding(0, 10, 0, 0);
 
-            group.Text =
-                "通讯日志 / 调试信息";
+            _txtLog = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                WordWrap = false,
+                Font = new Font("Consolas", 9F),
+                BackColor = Color.FromArgb(26, 34, 43),
+                ForeColor = Color.FromArgb(206, 221, 234),
+                BorderStyle = BorderStyle.None
+            };
 
-            group.Dock =
-                DockStyle.Bottom;
-
-            group.Height =
-                210;
-
-            _txtLog =
-                new RichTextBox();
-
-            _txtLog.Dock =
-                DockStyle.Fill;
-
-            _txtLog.ReadOnly =
-                true;
-
-            _txtLog.WordWrap =
-                false;
-
-            _txtLog.Font =
-                new System.Drawing.Font(
-                    "Consolas",
-                    9);
-
-            group.Controls.Add(
-                _txtLog);
-
-            Controls.Add(
-                group);
+            group.Controls.Add(_txtLog);
+            _rootLayout.Controls.Add(group, 0, 2);
         }
 
         // ============================================================
@@ -2362,18 +2041,6 @@ namespace ModbusAddressTool
                     device.Name;
 
                 _grid.Rows[row]
-                    .Cells["ReadFunction"]
-                    .Value =
-                    device.ReadFunctionCode
-                        .ToString("X2");
-
-                _grid.Rows[row]
-                    .Cells["WriteFunction"]
-                    .Value =
-                    device.WriteFunctionCode
-                        .ToString("X2");
-
-                _grid.Rows[row]
                     .Cells["Register"]
                     .Value =
                     device.RegisterAddress
@@ -2392,39 +2059,9 @@ namespace ModbusAddressTool
                         device.NewAddress);
 
                 _grid.Rows[row]
-                    .Cells["Custom"]
-                    .Value =
-                    device.UseCustomWriteFrame
-                        ? "是"
-                        : "否";
-
-                _grid.Rows[row]
                     .Cells["Status"]
                     .Value =
                     device.LastResult;
-                _grid.Rows[row]
-                    .Cells["Current"]
-                    .Value =
-                    FormatValue(
-                        device.CurrentAddress);
-            
-                _grid.Rows[row]
-                    .Cells["New"]
-                    .Value =
-                    FormatValue(
-                        device.NewAddress);
-            
-                _grid.Rows[row]
-                    .Cells["Custom"]
-                    .Value =
-                    device.UseCustomWriteFrame
-                        ? "是"
-                        : "否";
-            
-                _grid.Rows[row]
-                    .Cells["Status"]
-                    .Value =
-                    device.LastResult;                    
             }
         }
 
