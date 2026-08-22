@@ -14,14 +14,18 @@ namespace ModbusAddressTool
         public ushort RegisterAddress { get; set; }
 
         [DataMember(Order = 3)]
-        public ushort? CurrentValue { get; set; }
+        public uint? CurrentValue { get; set; }
 
         [DataMember(Order = 4)]
-        public ushort? TargetValue { get; set; }
+        public uint? TargetValue { get; set; }
+
+        [DataMember(Order = 5)]
+        public ushort RegisterCount { get; set; }
 
         public CustomRegisterItem()
         {
             Name = "自定义项";
+            RegisterCount = 1;
         }
 
         public CustomRegisterItem Clone()
@@ -31,7 +35,8 @@ namespace ModbusAddressTool
                 Name = Name,
                 RegisterAddress = RegisterAddress,
                 CurrentValue = CurrentValue,
-                TargetValue = TargetValue
+                TargetValue = TargetValue,
+                RegisterCount = RegisterCount
             };
         }
     }
