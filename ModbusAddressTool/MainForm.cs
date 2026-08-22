@@ -52,6 +52,9 @@ namespace ModbusAddressTool
 
         private TextBox _txtCustomReadFrame;
         private TextBox _txtCustomWriteFrame;
+        private DataGridView _customDataGrid;
+        private TableLayoutPanel _deviceEditorLayout;
+        private Control _customFrameDetails;
 
         private CheckBox _chkCustomWriteFrame;
         private CheckBox _chkAutoCrc;
@@ -69,15 +72,19 @@ namespace ModbusAddressTool
         private Button _btnDelete;
         private Button _btnRead;
         private Button _btnWrite;
-        private Button _btnReadAll;
-        private Button _btnWriteAll;
         private Button _btnImport;
         private Button _btnExport;
         private Button _btnSaveDefault;
+        private Button _btnAddCustomData;
+        private Button _btnDeleteCustomData;
 
         private RichTextBox _txtLog;
 
         private int _selectedIndex = -1;
+        private bool _suppressDeviceSelection;
+        private bool _loadingDevice;
+        private DeviceProfile _validatedDevice;
+        private string _validatedReadSignature;
 
         private DisplayFormat _displayFormat =
             DisplayFormat.Integer;
@@ -120,7 +127,7 @@ namespace ModbusAddressTool
 
         private void InitializeForm()
         {
-            Text = "串口地址修改工具V1.0(浮锐欧) By:周工";
+            Text = "串口修改工具V1.1(浮锐欧) By:周工";
             Width = 1440;
             Height = 900;
             MinimumSize = new Size(1100, 720);
@@ -229,9 +236,9 @@ namespace ModbusAddressTool
             rtuSettings.Controls.Add(
                 CreateInlineField("校验位", _cmbParity, 150, 54));
             rtuSettings.Controls.Add(
-                CreateInlineField("数据位", _cmbDataBits, 112, 48));
+                CreateInlineField("数据位", _cmbDataBits, 132, 62));
             rtuSettings.Controls.Add(
-                CreateInlineField("停止位", _cmbStopBits, 112, 48));
+                CreateInlineField("停止位", _cmbStopBits, 132, 62));
             _rtuSettingsPanel = rtuSettings;
 
             var networkSettings = new FlowLayoutPanel
@@ -380,6 +387,8 @@ namespace ModbusAddressTool
                 {
                     Text = text,
                     Dock = DockStyle.Fill,
+                    AutoEllipsis = true,
+                    UseMnemonic = false,
                     TextAlign =
                         System.Drawing.ContentAlignment.MiddleCenter
                 },
@@ -597,16 +606,27 @@ namespace ModbusAddressTool
             editorGroup.Dock = DockStyle.Fill;
             editorGroup.Margin = new Padding(5, 0, 0, 0);
 
-            var editorLayout = new TableLayoutPanel
+            var editorHost = new Panel
             {
                 Dock = DockStyle.Fill,
+                AutoScroll = true,
+                AutoScrollMinSize = new Size(0, 560),
+                Margin = new Padding(0)
+            };
+
+            _deviceEditorLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 3,
+                RowCount = 4,
                 Padding = new Padding(10, 5, 10, 10)
             };
-            editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
-            editorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 184F));
-            editorLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
+            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 280F));
+            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
 
             var basics = new TableLayoutPanel
             {
@@ -659,29 +679,54 @@ namespace ModbusAddressTool
                 Margin = new Padding(7, 0, 0, 0)
             }, 2, 3);
             basics.SetColumnSpan(basics.GetControlFromPosition(2, 3), 2);
-            editorLayout.Controls.Add(basics, 0, 0);
+            _txtRegister.TextChanged += ValidationEditorChanged;
+            _txtCurrentAddress.TextChanged += ValidationEditorChanged;
+            _cmbReadFunction.TextChanged += ValidationEditorChanged;
+            _cmbWriteFunction.TextChanged += ValidationEditorChanged;
+            _deviceEditorLayout.Controls.Add(basics, 0, 0);
 
             var frameGroup = CreateSection("自定义数据帧");
             frameGroup.Margin = new Padding(0, 0, 0, 8);
+            var frameContainer = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(8, 2, 8, 5)
+            };
+            frameContainer.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+            frameContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            _chkCustomWriteFrame = new CheckBox
+            {
+                Text = "启用自定义修改帧",
+                AutoSize = true,
+                Margin = new Padding(3, 5, 0, 0)
+            };
+            _chkCustomWriteFrame.CheckedChanged += CustomFrameVisibilityChanged;
+            frameContainer.Controls.Add(_chkCustomWriteFrame, 0, 0);
+
             var framePanel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
                 RowCount = 4,
-                Padding = new Padding(8, 5, 8, 5)
+                Visible = false,
+                Margin = new Padding(0)
             };
             framePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96F));
             framePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
             framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
-            framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            framePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
             framePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
             AddFormLabel(framePanel, "读取帧", 0, 0);
             _txtCustomReadFrame = CreateFrameTextBox();
+            _txtCustomReadFrame.TextChanged += ValidationEditorChanged;
             framePanel.Controls.Add(_txtCustomReadFrame, 1, 0);
             AddFormLabel(framePanel, "修改帧", 0, 1);
             _txtCustomWriteFrame = CreateFrameTextBox();
+            _txtCustomWriteFrame.TextChanged += ValidationEditorChanged;
             framePanel.Controls.Add(_txtCustomWriteFrame, 1, 1);
 
             var checks = new FlowLayoutPanel
@@ -689,12 +734,6 @@ namespace ModbusAddressTool
                 Dock = DockStyle.Fill,
                 WrapContents = false,
                 Margin = new Padding(0)
-            };
-            _chkCustomWriteFrame = new CheckBox
-            {
-                Text = "启用自定义修改帧",
-                AutoSize = true,
-                Margin = new Padding(3, 8, 14, 0)
             };
             _chkAutoCrc = new CheckBox
             {
@@ -710,7 +749,7 @@ namespace ModbusAddressTool
                 AutoSize = true,
                 Margin = new Padding(3, 8, 0, 0)
             };
-            checks.Controls.Add(_chkCustomWriteFrame);
+            _chkAutoCrc.CheckedChanged += ValidationEditorChanged;
             checks.Controls.Add(_chkAutoCrc);
             checks.Controls.Add(_chkVerify);
             framePanel.Controls.Add(checks, 0, 2);
@@ -725,8 +764,79 @@ namespace ModbusAddressTool
             };
             framePanel.Controls.Add(hint, 0, 3);
             framePanel.SetColumnSpan(hint, 2);
-            frameGroup.Controls.Add(framePanel);
-            editorLayout.Controls.Add(frameGroup, 0, 1);
+            _customFrameDetails = framePanel;
+            frameContainer.Controls.Add(framePanel, 0, 1);
+            frameGroup.Controls.Add(frameContainer);
+            _deviceEditorLayout.Controls.Add(frameGroup, 0, 1);
+
+            var customDataGroup = CreateSection("自定义修改数据");
+            customDataGroup.Margin = new Padding(0, 0, 0, 8);
+            var customDataLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(8, 3, 8, 8)
+            };
+            customDataLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            customDataLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var customDataToolbar = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            _btnAddCustomData = CreateButton("添加项目", AddCustomDataItem);
+            _btnDeleteCustomData = CreateButton("删除项目", DeleteCustomDataItem);
+            _btnAddCustomData.Width = 84;
+            _btnDeleteCustomData.Width = 84;
+            customDataToolbar.Controls.Add(_btnAddCustomData);
+            customDataToolbar.Controls.Add(_btnDeleteCustomData);
+            customDataToolbar.Controls.Add(new Label
+            {
+                Text = "目标值为空或与当前值一致时跳过修改",
+                AutoSize = true,
+                ForeColor = Color.FromArgb(112, 123, 135),
+                Margin = new Padding(10, 10, 0, 0)
+            });
+            customDataLayout.Controls.Add(customDataToolbar, 0, 0);
+
+            _customDataGrid = new DataGridView
+            {
+                Dock = DockStyle.Fill,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                MultiSelect = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                AutoGenerateColumns = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                RowHeadersVisible = false,
+                ScrollBars = ScrollBars.Both,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                GridColor = Color.FromArgb(226, 232, 238),
+                EnableHeadersVisualStyles = false,
+                ColumnHeadersHeight = 30,
+                RowTemplate = { Height = 28 }
+            };
+            _customDataGrid.ColumnHeadersDefaultCellStyle.BackColor =
+                Color.FromArgb(236, 241, 246);
+            _customDataGrid.ColumnHeadersDefaultCellStyle.ForeColor =
+                Color.FromArgb(50, 61, 72);
+            _customDataGrid.DefaultCellStyle.SelectionBackColor =
+                Color.FromArgb(218, 235, 252);
+            _customDataGrid.DefaultCellStyle.SelectionForeColor =
+                Color.FromArgb(20, 74, 126);
+            AddCustomDataColumn("ItemName", "项目名", 130);
+            AddCustomDataColumn("ItemRegister", "寄存器地址", 90);
+            AddCustomDataColumn("ItemCurrent", "当前值", 80);
+            AddCustomDataColumn("ItemTarget", "目标值", 80);
+            _customDataGrid.CellValueChanged += CustomDataGrid_CellValueChanged;
+            customDataLayout.Controls.Add(_customDataGrid, 0, 1);
+            customDataGroup.Controls.Add(customDataLayout);
+            _deviceEditorLayout.Controls.Add(customDataGroup, 0, 2);
 
             var actions = new FlowLayoutPanel
             {
@@ -738,15 +848,12 @@ namespace ModbusAddressTool
             _btnRead = CreateButton("读取当前设备", ReadSelectedDevice);
             _btnWrite = CreateButton("修改当前设备", WriteSelectedDevice);
             SetAccentButton(_btnWrite, Color.FromArgb(32, 123, 229));
-            _btnReadAll = CreateButton("读取全部", ReadAllDevices);
-            _btnWriteAll = CreateButton("修改全部", WriteAllDevices);
             actions.Controls.Add(_btnRead);
             actions.Controls.Add(_btnWrite);
-            actions.Controls.Add(_btnReadAll);
-            actions.Controls.Add(_btnWriteAll);
-            editorLayout.Controls.Add(actions, 0, 2);
+            _deviceEditorLayout.Controls.Add(actions, 0, 3);
 
-            editorGroup.Controls.Add(editorLayout);
+            editorHost.Controls.Add(_deviceEditorLayout);
+            editorGroup.Controls.Add(editorHost);
             split.Panel2.Controls.Add(editorGroup);
             _rootLayout.Controls.Add(split, 0, 1);
         }
@@ -776,6 +883,166 @@ namespace ModbusAddressTool
 
             _grid.Columns.Add(
                 column);
+        }
+
+        private void AddCustomDataColumn(
+            string name,
+            string header,
+            int weight)
+        {
+            _customDataGrid.Columns.Add(
+                new DataGridViewTextBoxColumn
+                {
+                    Name = name,
+                    HeaderText = header,
+                    FillWeight = weight,
+                    SortMode = DataGridViewColumnSortMode.NotSortable
+                });
+        }
+
+        private void CustomFrameVisibilityChanged(
+            object sender,
+            EventArgs e)
+        {
+            if (_customFrameDetails == null ||
+                _deviceEditorLayout == null)
+                return;
+
+            bool visible = _chkCustomWriteFrame.Checked;
+            _customFrameDetails.Visible = visible;
+            _deviceEditorLayout.RowStyles[1].Height = visible ? 204F : 72F;
+            _deviceEditorLayout.PerformLayout();
+
+            if (!_loadingDevice)
+                InvalidateReadValidation();
+        }
+
+        private void ValidationEditorChanged(
+            object sender,
+            EventArgs e)
+        {
+            if (!_loadingDevice)
+                InvalidateReadValidation();
+        }
+
+        private void CustomDataGrid_CellValueChanged(
+            object sender,
+            DataGridViewCellEventArgs e)
+        {
+            if (_loadingDevice || e.RowIndex < 0 || e.ColumnIndex < 0)
+                return;
+
+            string columnName = _customDataGrid.Columns[e.ColumnIndex].Name;
+            if (columnName == "ItemRegister" || columnName == "ItemCurrent")
+                InvalidateReadValidation();
+        }
+
+        private void AddCustomDataItem(
+            object sender,
+            EventArgs e)
+        {
+            int row = _customDataGrid.Rows.Add();
+            _customDataGrid.Rows[row].Cells["ItemName"].Value =
+                "自定义项" + (row + 1);
+            _customDataGrid.Rows[row].Cells["ItemRegister"].Value = "0000";
+            _customDataGrid.ClearSelection();
+            _customDataGrid.Rows[row].Selected = true;
+            _customDataGrid.CurrentCell =
+                _customDataGrid.Rows[row].Cells["ItemName"];
+            _customDataGrid.BeginEdit(true);
+            InvalidateReadValidation();
+        }
+
+        private void DeleteCustomDataItem(
+            object sender,
+            EventArgs e)
+        {
+            if (_customDataGrid.SelectedRows.Count == 0)
+                return;
+
+            _customDataGrid.Rows.RemoveAt(
+                _customDataGrid.SelectedRows[0].Index);
+            InvalidateReadValidation();
+        }
+
+        private void MarkReadValidated(DeviceProfile device)
+        {
+            _validatedDevice = device;
+            _validatedReadSignature = BuildReadValidationSignature(device);
+            UpdateWriteButtonState();
+        }
+
+        private void InvalidateReadValidation()
+        {
+            _validatedDevice = null;
+            _validatedReadSignature = null;
+            UpdateWriteButtonState();
+        }
+
+        private bool IsReadValidated(DeviceProfile device)
+        {
+            return device != null &&
+                object.ReferenceEquals(_validatedDevice, device) &&
+                string.Equals(
+                    _validatedReadSignature,
+                    BuildReadValidationSignature(device),
+                    StringComparison.Ordinal);
+        }
+
+        private string BuildReadValidationSignature(DeviceProfile device)
+        {
+            var text = new StringBuilder();
+            text.Append(device.CurrentAddress).Append('|')
+                .Append(device.RegisterAddress).Append('|')
+                .Append(device.ReadFunctionCode).Append('|')
+                .Append(device.WriteFunctionCode).Append('|')
+                .Append(device.UseCustomWriteFrame).Append('|')
+                .Append(device.CustomReadFrame).Append('|')
+                .Append(device.CustomWriteFrame).Append('|')
+                .Append(device.AutoAppendCrc);
+
+            if (device.CustomRegisterItems != null)
+            {
+                foreach (CustomRegisterItem item in device.CustomRegisterItems)
+                {
+                    text.Append('|').Append(item.RegisterAddress).Append(':')
+                        .Append(item.CurrentValue.HasValue
+                            ? item.CurrentValue.Value.ToString(
+                                CultureInfo.InvariantCulture)
+                            : "-");
+                }
+            }
+            return text.ToString();
+        }
+
+        private bool IsCommunicationConnected()
+        {
+            return (_serialPort != null && _serialPort.IsOpen) ||
+                (_tcpClient != null && _tcpClient.Connected) ||
+                _udpClient != null;
+        }
+
+        private void UpdateWriteButtonState()
+        {
+            if (_btnWrite == null)
+                return;
+
+            bool enabled = IsCommunicationConnected() &&
+                _selectedIndex >= 0 &&
+                _selectedIndex < _devices.Count &&
+                IsReadValidated(_devices[_selectedIndex]);
+            _btnWrite.Enabled = enabled;
+            if (enabled)
+            {
+                SetAccentButton(_btnWrite, Color.FromArgb(32, 123, 229));
+            }
+            else
+            {
+                _btnWrite.BackColor = Color.FromArgb(218, 223, 229);
+                _btnWrite.ForeColor = Color.FromArgb(125, 134, 144);
+                _btnWrite.FlatAppearance.BorderColor =
+                    Color.FromArgb(201, 208, 215);
+            }
         }
 
         private void AddEditorLabel(
@@ -909,14 +1176,8 @@ namespace ModbusAddressTool
 
             try
             {
-                var serializer = new DataContractJsonSerializer(
-                    typeof(List<DeviceProfile>));
-                List<DeviceProfile> devices;
-                using (FileStream stream = File.OpenRead(path))
-                {
-                    devices = serializer.ReadObject(stream)
-                        as List<DeviceProfile>;
-                }
+                List<DeviceProfile> devices =
+                    DeserializeDefaultDevices(path);
                 if (devices == null || devices.Count == 0)
                     throw new InvalidDataException("默认配置文件格式错误。");
 
@@ -931,6 +1192,35 @@ namespace ModbusAddressTool
             {
                 Log("默认设备配置加载失败，将使用内置配置：" + ex.Message);
                 return false;
+            }
+        }
+
+        private static List<DeviceProfile> DeserializeDefaultDevices(
+            string path)
+        {
+            byte[] data = File.ReadAllBytes(path);
+            try
+            {
+                var listSerializer = new DataContractJsonSerializer(
+                    typeof(List<DeviceProfile>));
+                using (var stream = new MemoryStream(data))
+                {
+                    return listSerializer.ReadObject(stream)
+                        as List<DeviceProfile>;
+                }
+            }
+            catch
+            {
+                var deviceSerializer = new DataContractJsonSerializer(
+                    typeof(DeviceProfile));
+                using (var stream = new MemoryStream(data))
+                {
+                    DeviceProfile device = deviceSerializer.ReadObject(stream)
+                        as DeviceProfile;
+                    return device == null
+                        ? null
+                        : new List<DeviceProfile> { device };
+                }
             }
         }
 
@@ -1177,14 +1467,7 @@ namespace ModbusAddressTool
             _btnRead.Enabled =
                 connected;
 
-            _btnWrite.Enabled =
-                connected;
-
-            _btnReadAll.Enabled =
-                connected;
-
-            _btnWriteAll.Enabled =
-                connected;
+            InvalidateReadValidation();
         }
 
         private static Parity ParseParity(
@@ -1443,7 +1726,7 @@ namespace ModbusAddressTool
             byte address,
             byte function,
             ushort register,
-            byte newAddress)
+            ushort value)
         {
             byte[] frame =
             {
@@ -1453,8 +1736,8 @@ namespace ModbusAddressTool
                 (byte)(register >> 8),
                 (byte)(register & 0xFF),
 
-                0x00,
-                newAddress
+                (byte)(value >> 8),
+                (byte)(value & 0xFF)
             };
 
             return AppendCrc(
@@ -1465,7 +1748,7 @@ namespace ModbusAddressTool
             byte address,
             byte function,
             ushort register,
-            byte newAddress)
+            ushort value)
         {
             byte[] frame =
             {
@@ -1480,8 +1763,8 @@ namespace ModbusAddressTool
 
                 0x02,
 
-                0x00,
-                newAddress
+                (byte)(value >> 8),
+                (byte)(value & 0xFF)
             };
 
             return AppendCrc(
@@ -1659,9 +1942,11 @@ namespace ModbusAddressTool
             try
             {
                 byte[] frame;
+                byte expectedAddress = device.CurrentAddress;
+                bool useCustomRead = !string.IsNullOrWhiteSpace(
+                    device.CustomReadFrame);
 
-                if (!string.IsNullOrWhiteSpace(
-                    device.CustomReadFrame))
+                if (useCustomRead)
                 {
                     Log(
                         "读取模式：自定义数据帧");
@@ -1687,10 +1972,22 @@ namespace ModbusAddressTool
                 byte[] response =
                     SendFrame(
                         frame,
-                        5,
+                        7,
                         device);
 
-                if (response.Length >= 5)
+                if (useCustomRead)
+                {
+                    ValidateCustomResponse(response, expectedAddress);
+                }
+                else
+                {
+                    ValidateStandardResponse(
+                        response,
+                        expectedAddress,
+                        device.ReadFunctionCode);
+                }
+
+                if (!useCustomRead && response.Length >= 5)
                 {
                     int byteCount =
                         response[2];
@@ -1711,18 +2008,19 @@ namespace ModbusAddressTool
                             "第一个寄存器值：" +
                             FormatValue(value));
 
-                        if (value >= 1 &&
-                            value <= 247)
+                        if (value != expectedAddress)
                         {
-                            device.CurrentAddress =
-                                (byte)value;
-
-                            Log(
-                                "识别当前设备地址：" +
-                                device.CurrentAddress);
+                            throw new InvalidDataException(string.Format(
+                                "设备身份不匹配：当前选择地址为 {0}，读取值为 {1}。",
+                                expectedAddress,
+                                value));
                         }
+
+                        Log("设备地址验证通过：" + expectedAddress);
                     }
                 }
+
+                ReadCustomRegisterItems(device);
 
                 device.MarkStatus(
                     "读取成功");
@@ -1744,6 +2042,7 @@ namespace ModbusAddressTool
             finally
             {
                 RefreshGrid();
+                RefreshSelectedDeviceEditor(device);
             }
         }
 
@@ -1757,10 +2056,10 @@ namespace ModbusAddressTool
             try
             {
                 byte[] frame;
+                bool useCustomWrite = device.UseCustomWriteFrame &&
+                    !string.IsNullOrWhiteSpace(device.CustomWriteFrame);
 
-                if (device.UseCustomWriteFrame &&
-                    !string.IsNullOrWhiteSpace(
-                        device.CustomWriteFrame))
+                if (useCustomWrite)
                 {
                     Log(
                         "==================================================");
@@ -1839,34 +2138,33 @@ namespace ModbusAddressTool
                 byte[] response =
                     SendFrame(
                         frame,
-                        4,
+                        useCustomWrite ? 4 : 8,
                         device);
 
-                if (response.Length >= 3 &&
-                    (response[1] & 0x80) != 0)
-                {
-                    byte exceptionCode =
-                        response.Length > 2
-                            ? response[2]
-                            : (byte)0;
-
-                    throw new InvalidDataException(
-                        string.Format(
-                            "设备返回 Modbus 异常码：0x{0:X2}",
-                            exceptionCode));
-                }
+                if (useCustomWrite)
+                    ValidateCustomResponse(response, device.CurrentAddress);
+                else
+                    ValidateStandardResponse(
+                        response,
+                        device.CurrentAddress,
+                        device.WriteFunctionCode);
 
                 Log(
                     "修改命令发送完成。");
 
+                byte previousAddress = device.CurrentAddress;
                 device.CurrentAddress =
                     device.NewAddress;
 
+                int customWriteCount =
+                    WriteCustomRegisterItems(device);
+
                 device.MarkStatus(
                     string.Format(
-                        "修改命令已发送：{0} → {1}",
-                        device.CurrentAddress,
-                        device.NewAddress));
+                        "修改命令已发送：{0} → {1}，自定义数据 {2} 项",
+                        previousAddress,
+                        device.NewAddress,
+                        customWriteCount));
 
                 return true;
             }
@@ -1885,6 +2183,7 @@ namespace ModbusAddressTool
             finally
             {
                 RefreshGrid();
+                RefreshSelectedDeviceEditor(device);
             }
         }
 
@@ -1905,9 +2204,20 @@ namespace ModbusAddressTool
             Log(
                 "========== 开始读取 ==========");
 
-            ReadDevice(
-                _devices[
-                    _selectedIndex]);
+            DeviceProfile device = _devices[_selectedIndex];
+            bool ok = ReadDevice(device);
+            if (ok &&
+                (device.CustomRegisterItems == null ||
+                 device.CustomRegisterItems.All(item => item.CurrentValue.HasValue)))
+            {
+                MarkReadValidated(device);
+                Log("读取验证通过，已允许修改当前设备。");
+            }
+            else
+            {
+                InvalidateReadValidation();
+                Log("读取验证未通过，修改功能保持禁用。");
+            }
 
             Log(
                 "========== 读取结束 ==========");
@@ -1927,6 +2237,17 @@ namespace ModbusAddressTool
                 _devices[
                     _selectedIndex];
 
+            if (!IsReadValidated(device))
+            {
+                InvalidateReadValidation();
+                MessageBox.Show(
+                    "当前设备尚未完成读取验证，请先读取当前设备及全部自定义项。",
+                    "禁止修改",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             Log(
                 "========== 开始修改 ==========");
 
@@ -1940,18 +2261,30 @@ namespace ModbusAddressTool
                 Log(
                     "开始执行修改后验证。");
 
-                VerifyNewAddress(
-                    device);
+                ok = VerifyNewAddress(device);
             }
+
+            InvalidateReadValidation();
 
             Log(
                 "========== 修改结束 ==========");
+
+            MessageBox.Show(
+                ok
+                    ? "设备修改成功。"
+                    : "设备修改失败，请查看通讯日志。",
+                ok ? "修改成功" : "修改失败",
+                MessageBoxButtons.OK,
+                ok ? MessageBoxIcon.Information : MessageBoxIcon.Error);
         }
 
         private void ReadAllDevices(
             object sender,
             EventArgs e)
         {
+            if (_selectedIndex >= 0 && !SaveEditor())
+                return;
+
             foreach (
                 DeviceProfile device
                 in _devices)
@@ -1967,6 +2300,9 @@ namespace ModbusAddressTool
             object sender,
             EventArgs e)
         {
+            if (_selectedIndex >= 0 && !SaveEditor())
+                return;
+
             if (MessageBox.Show(
                 "确定批量修改全部设备地址？",
                 "确认",
@@ -2043,7 +2379,7 @@ namespace ModbusAddressTool
                 byte[] result =
                     SendFrame(
                         frame,
-                        5,
+                        7,
                         device);
 
                 if (result.Length >= 5)
@@ -2097,6 +2433,9 @@ namespace ModbusAddressTool
             object sender,
             EventArgs e)
         {
+            if (_selectedIndex >= 0 && !SaveEditor())
+                return;
+
             int number =
                 _devices.Count + 1;
 
@@ -2179,6 +2518,8 @@ namespace ModbusAddressTool
 
             byte next;
 
+            List<CustomRegisterItem> customItems;
+
             if (!TryParseFunction(
                 _cmbReadFunction.Text,
                 out readFunction))
@@ -2229,6 +2570,9 @@ namespace ModbusAddressTool
                 return false;
             }
 
+            if (!TryReadCustomDataGrid(out customItems))
+                return false;
+
             device.Name =
                 _txtName.Text.Trim();
 
@@ -2261,6 +2605,73 @@ namespace ModbusAddressTool
 
             device.VerifyAfterWrite =
                 _chkVerify.Checked;
+
+            device.CustomRegisterItems =
+                customItems;
+
+            return true;
+        }
+
+        private bool TryReadCustomDataGrid(
+            out List<CustomRegisterItem> items)
+        {
+            items = new List<CustomRegisterItem>();
+            _customDataGrid.EndEdit();
+
+            foreach (DataGridViewRow row in _customDataGrid.Rows)
+            {
+                string name = Convert.ToString(
+                    row.Cells["ItemName"].Value).Trim();
+                string registerText = Convert.ToString(
+                    row.Cells["ItemRegister"].Value).Trim();
+                string currentText = Convert.ToString(
+                    row.Cells["ItemCurrent"].Value).Trim();
+                string targetText = Convert.ToString(
+                    row.Cells["ItemTarget"].Value).Trim();
+
+                ushort register;
+                if (!TryParseUShort(registerText, out register))
+                {
+                    MessageBox.Show(string.Format(
+                        "自定义修改数据第 {0} 行的寄存器地址无效。",
+                        row.Index + 1));
+                    return false;
+                }
+
+                ushort current = 0;
+                if (!string.IsNullOrWhiteSpace(currentText) &&
+                    !TryParseUShort(currentText, out current))
+                {
+                    MessageBox.Show(string.Format(
+                        "自定义修改数据第 {0} 行的当前值无效。",
+                        row.Index + 1));
+                    return false;
+                }
+
+                ushort target = 0;
+                if (!string.IsNullOrWhiteSpace(targetText) &&
+                    !TryParseUShort(targetText, out target))
+                {
+                    MessageBox.Show(string.Format(
+                        "自定义修改数据第 {0} 行的目标值无效。",
+                        row.Index + 1));
+                    return false;
+                }
+
+                items.Add(new CustomRegisterItem
+                {
+                    Name = string.IsNullOrWhiteSpace(name)
+                        ? "自定义项" + (row.Index + 1)
+                        : name,
+                    RegisterAddress = register,
+                    CurrentValue = string.IsNullOrWhiteSpace(currentText)
+                        ? (ushort?)null
+                        : current,
+                    TargetValue = string.IsNullOrWhiteSpace(targetText)
+                        ? (ushort?)null
+                        : target
+                });
+            }
 
             return true;
         }
@@ -2317,6 +2728,9 @@ namespace ModbusAddressTool
             object sender,
             EventArgs e)
         {
+            if (_suppressDeviceSelection)
+                return;
+
             if (_grid.SelectedRows.Count == 0)
                 return;
 
@@ -2327,6 +2741,17 @@ namespace ModbusAddressTool
                 index >= _devices.Count)
                 return;
 
+            if (index == _selectedIndex)
+                return;
+
+            int previousIndex = _selectedIndex;
+            if (previousIndex >= 0 && !SaveEditor())
+            {
+                SelectDevice(previousIndex);
+                return;
+            }
+
+            InvalidateReadValidation();
             _selectedIndex =
                 index;
 
@@ -2341,10 +2766,16 @@ namespace ModbusAddressTool
                 index >= _grid.Rows.Count)
                 return;
 
+            if (index != _selectedIndex)
+                InvalidateReadValidation();
+
+            _suppressDeviceSelection = true;
             _grid.ClearSelection();
 
             _grid.Rows[index]
                 .Selected = true;
+            _grid.CurrentCell = _grid.Rows[index].Cells[0];
+            _suppressDeviceSelection = false;
 
             _selectedIndex =
                 index;
@@ -2356,6 +2787,9 @@ namespace ModbusAddressTool
         private void LoadDevice(
             DeviceProfile device)
         {
+            _loadingDevice = true;
+            try
+            {
             _txtName.Text =
                 device.Name;
 
@@ -2393,6 +2827,182 @@ namespace ModbusAddressTool
 
             _chkVerify.Checked =
                 device.VerifyAfterWrite;
+
+            if (device.CustomRegisterItems == null)
+                device.CustomRegisterItems = new List<CustomRegisterItem>();
+
+            _customDataGrid.Rows.Clear();
+            foreach (CustomRegisterItem item in device.CustomRegisterItems)
+            {
+                int row = _customDataGrid.Rows.Add();
+                _customDataGrid.Rows[row].Cells["ItemName"].Value = item.Name;
+                _customDataGrid.Rows[row].Cells["ItemRegister"].Value =
+                    "0x" + item.RegisterAddress.ToString("X4");
+                _customDataGrid.Rows[row].Cells["ItemCurrent"].Value =
+                    item.CurrentValue.HasValue
+                        ? FormatValue(item.CurrentValue.Value)
+                        : "";
+                _customDataGrid.Rows[row].Cells["ItemTarget"].Value =
+                    item.TargetValue.HasValue
+                        ? FormatValue(item.TargetValue.Value)
+                        : "";
+            }
+            }
+            finally
+            {
+                _loadingDevice = false;
+            }
+        }
+
+        private void ReadCustomRegisterItems(DeviceProfile device)
+        {
+            if (device.CustomRegisterItems == null ||
+                device.CustomRegisterItems.Count == 0)
+                return;
+
+            foreach (CustomRegisterItem item in device.CustomRegisterItems)
+            {
+                byte[] frame = BuildReadFrame(
+                    device.CurrentAddress,
+                    device.ReadFunctionCode,
+                    item.RegisterAddress,
+                    1);
+                byte[] response = SendFrame(frame, 7, device);
+                ValidateStandardResponse(
+                    response,
+                    device.CurrentAddress,
+                    device.ReadFunctionCode);
+                if (response[2] < 2)
+                    throw new InvalidDataException(
+                        "自定义项目“" + item.Name + "”读取响应长度不足。");
+
+                item.CurrentValue = (ushort)(
+                    (response[3] << 8) | response[4]);
+                Log(string.Format(
+                    "自定义项目读取：{0}，寄存器=0x{1:X4}，当前值={2}",
+                    item.Name,
+                    item.RegisterAddress,
+                    item.CurrentValue.Value));
+            }
+        }
+
+        private int WriteCustomRegisterItems(DeviceProfile device)
+        {
+            if (device.CustomRegisterItems == null)
+                return 0;
+
+            int written = 0;
+            foreach (CustomRegisterItem item in device.CustomRegisterItems)
+            {
+                if (!item.TargetValue.HasValue ||
+                    (item.CurrentValue.HasValue &&
+                     item.CurrentValue.Value == item.TargetValue.Value))
+                {
+                    continue;
+                }
+
+                byte[] frame;
+                if (device.WriteFunctionCode == 16)
+                {
+                    frame = BuildWrite10Frame(
+                        device.CurrentAddress,
+                        device.WriteFunctionCode,
+                        item.RegisterAddress,
+                        item.TargetValue.Value);
+                }
+                else
+                {
+                    frame = BuildWrite06Frame(
+                        device.CurrentAddress,
+                        device.WriteFunctionCode,
+                        item.RegisterAddress,
+                        item.TargetValue.Value);
+                }
+
+                byte[] response = SendFrame(frame, 8, device);
+                ValidateStandardResponse(
+                    response,
+                    device.CurrentAddress,
+                    device.WriteFunctionCode);
+                Log(string.Format(
+                    "自定义项目修改：{0}，寄存器=0x{1:X4}，{2} → {3}",
+                    item.Name,
+                    item.RegisterAddress,
+                    item.CurrentValue.HasValue
+                        ? item.CurrentValue.Value.ToString()
+                        : "未知",
+                    item.TargetValue.Value));
+                item.CurrentValue = item.TargetValue;
+                written++;
+            }
+            return written;
+        }
+
+        private static void ThrowIfModbusException(byte[] response)
+        {
+            if (response.Length >= 3 && (response[1] & 0x80) != 0)
+            {
+                throw new InvalidDataException(string.Format(
+                    "设备返回 Modbus 异常码：0x{0:X2}",
+                    response[2]));
+            }
+        }
+
+        private static void ValidateStandardResponse(
+            byte[] response,
+            byte expectedAddress,
+            byte expectedFunction)
+        {
+            if (response == null || response.Length < 5)
+                throw new InvalidDataException("设备响应长度不足。");
+
+            if (!CheckCrc(response))
+                throw new InvalidDataException("设备响应 CRC 校验失败。");
+
+            if (response[0] != expectedAddress)
+            {
+                throw new InvalidDataException(string.Format(
+                    "响应设备地址不匹配：期望 {0}，实际 {1}。",
+                    expectedAddress,
+                    response[0]));
+            }
+
+            ThrowIfModbusException(response);
+            if (response[1] != expectedFunction)
+            {
+                throw new InvalidDataException(string.Format(
+                    "响应功能码不匹配：期望 0x{0:X2}，实际 0x{1:X2}。",
+                    expectedFunction,
+                    response[1]));
+            }
+        }
+
+        private static void ValidateCustomResponse(
+            byte[] response,
+            byte expectedAddress)
+        {
+            if (response == null || response.Length < 4)
+                throw new InvalidDataException("自定义读取响应长度不足。");
+            if (!CheckCrc(response))
+                throw new InvalidDataException("自定义读取响应 CRC 校验失败。");
+            if (response[0] != expectedAddress)
+            {
+                throw new InvalidDataException(string.Format(
+                    "响应设备地址不匹配：期望 {0}，实际 {1}。",
+                    expectedAddress,
+                    response[0]));
+            }
+            ThrowIfModbusException(response);
+        }
+
+        private void RefreshSelectedDeviceEditor(DeviceProfile device)
+        {
+            if (_selectedIndex >= 0 &&
+                _selectedIndex < _devices.Count &&
+                object.ReferenceEquals(_devices[_selectedIndex], device))
+            {
+                LoadDevice(device);
+            }
         }
 
         // ============================================================
@@ -2452,7 +3062,8 @@ namespace ModbusAddressTool
             object sender,
             EventArgs e)
         {
-            SaveEditor();
+            if (!SaveEditor())
+                return;
 
             using (
                 SaveFileDialog dialog =
@@ -2584,6 +3195,13 @@ namespace ModbusAddressTool
             }
 
             RefreshGrid();
+
+            if (_selectedIndex >= 0 &&
+                _selectedIndex < _devices.Count &&
+                SaveEditor())
+            {
+                LoadDevice(_devices[_selectedIndex]);
+            }
         }
 
         private string FormatValue(
@@ -2706,6 +3324,20 @@ namespace ModbusAddressTool
 
             text =
                 text.Trim();
+
+            if ((text.Length == 8 || text.Length == 16) &&
+                text.All(c => c == '0' || c == '1'))
+            {
+                try
+                {
+                    value = Convert.ToUInt16(text, 2);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
 
             if (text.StartsWith(
                 "0x",
