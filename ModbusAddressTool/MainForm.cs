@@ -2543,7 +2543,7 @@ namespace ModbusAddressTool
                 return false;
             }
 
-            if (!TryParseUShort(
+            if (!TryParseRegisterAddress(
                 _txtRegister.Text,
                 out register))
             {
@@ -3385,6 +3385,31 @@ namespace ModbusAddressTool
             return ushort.TryParse(
                 text,
                 NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        private static bool TryParseRegisterAddress(
+            string text,
+            out ushort value)
+        {
+            value = 0;
+
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            text = text.Trim();
+
+            if (text.StartsWith(
+                "0x",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                text = text.Substring(2);
+            }
+
+            return ushort.TryParse(
+                text,
+                NumberStyles.HexNumber,
                 CultureInfo.InvariantCulture,
                 out value);
         }
