@@ -5,6 +5,8 @@ using System.Globalization;
 using System.IO;
 using System.IO.Ports;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Threading;
@@ -15,6 +17,9 @@ namespace ModbusAddressTool
     public class MainForm : Form
     {
         private SerialPort _serialPort;
+        private TcpClient _tcpClient;
+        private UdpClient _udpClient;
+        private IPEndPoint _udpRemoteEndPoint;
 
         private readonly List<DeviceProfile> _devices =
             new List<DeviceProfile>();
@@ -24,10 +29,15 @@ namespace ModbusAddressTool
         private TableLayoutPanel _rootLayout;
 
         private ComboBox _cmbPort;
+        private ComboBox _cmbTransport;
         private ComboBox _cmbBaud;
         private ComboBox _cmbParity;
         private ComboBox _cmbDataBits;
         private ComboBox _cmbStopBits;
+        private TextBox _txtHost;
+        private TextBox _txtNetworkPort;
+        private Control _rtuSettingsPanel;
+        private Control _networkSettingsPanel;
 
         private ComboBox _cmbReadFunction;
         private ComboBox _cmbWriteFunction;
@@ -106,7 +116,7 @@ namespace ModbusAddressTool
 
         private void InitializeForm()
         {
-            Text = "Modbus RTU RS485 地址修改工具";
+            Text = "串口地址修改工具V1.0(浮锐欧) By:周工";
             Width = 1440;
             Height = 900;
             MinimumSize = new Size(1100, 720);
@@ -136,45 +146,59 @@ namespace ModbusAddressTool
             Controls.Add(_rootLayout);
         }
 
+        private enum TransportMode
+        {
+            Rtu,
+            Tcp,
+            Udp
+        }
+
         // ============================================================
         // 串口
         // ============================================================
 
         private void InitializeSerialPanel()
         {
-            var group = CreateSection("串口通讯");
+            var group = CreateSection("通讯连接");
             group.Margin = new Padding(0, 0, 0, 10);
 
             var panel = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 15,
+                ColumnCount = 3,
                 RowCount = 1,
                 Padding = new Padding(10, 8, 10, 8)
             };
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            float[] widths =
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 142F));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 184F));
+
+            _cmbTransport = CreateDropDown();
+            _cmbTransport.Items.AddRange(new object[] { "RTU", "TCP", "UDP" });
+            _cmbTransport.SelectedItem = "RTU";
+            _cmbTransport.SelectedIndexChanged += TransportChanged;
+            panel.Controls.Add(
+                CreateInlineField("方式", _cmbTransport, 132, 38),
+                0,
+                0);
+
+            var settingsHost = new Panel
             {
-                42, 100, 68, 12, 54, 90, 54, 82,
-                48, 58, 48, 58, 100, 90, 84
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0)
             };
-            for (int i = 0; i < widths.Length; i++)
+
+            var rtuSettings = new FlowLayoutPanel
             {
-                panel.ColumnStyles.Add(
-                    i == 12
-                        ? new ColumnStyle(SizeType.Percent, 100F)
-                        : new ColumnStyle(SizeType.Absolute, widths[i]));
-            }
-
-            AddLabel(panel, "串口", 0, 0);
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                AutoScroll = true,
+                Margin = new Padding(0)
+            };
             _cmbPort = CreateDropDown();
-            panel.Controls.Add(_cmbPort, 1, 0);
-
             _btnRefresh = CreateButton("刷新", delegate { RefreshPorts(); });
-            _btnRefresh.Dock = DockStyle.Fill;
-            panel.Controls.Add(_btnRefresh, 2, 0);
-
-            AddLabel(panel, "波特率", 4, 0);
+            _btnRefresh.Width = 64;
             _cmbBaud = CreateDropDown();
             _cmbBaud.Items.AddRange(new object[]
             {
@@ -182,38 +206,130 @@ namespace ModbusAddressTool
                 "38400", "57600", "115200"
             });
             _cmbBaud.SelectedItem = "9600";
-            panel.Controls.Add(_cmbBaud, 5, 0);
-
-            AddLabel(panel, "校验位", 6, 0);
             _cmbParity = CreateDropDown();
             _cmbParity.Items.AddRange(
                 new object[] { "None", "Even", "Odd", "Mark", "Space" });
             _cmbParity.SelectedItem = "None";
-            panel.Controls.Add(_cmbParity, 7, 0);
-
-            AddLabel(panel, "数据位", 8, 0);
             _cmbDataBits = CreateDropDown();
             _cmbDataBits.Items.AddRange(new object[] { "8", "7" });
             _cmbDataBits.SelectedItem = "8";
-            panel.Controls.Add(_cmbDataBits, 9, 0);
-
-            AddLabel(panel, "停止位", 10, 0);
             _cmbStopBits = CreateDropDown();
             _cmbStopBits.Items.AddRange(new object[] { "1", "1.5", "2" });
             _cmbStopBits.SelectedItem = "1";
-            panel.Controls.Add(_cmbStopBits, 11, 0);
+
+            rtuSettings.Controls.Add(
+                CreateInlineField("串口", _cmbPort, 142, 38));
+            rtuSettings.Controls.Add(_btnRefresh);
+            rtuSettings.Controls.Add(
+                CreateInlineField("波特率", _cmbBaud, 154, 54));
+            rtuSettings.Controls.Add(
+                CreateInlineField("校验位", _cmbParity, 150, 54));
+            rtuSettings.Controls.Add(
+                CreateInlineField("数据位", _cmbDataBits, 112, 48));
+            rtuSettings.Controls.Add(
+                CreateInlineField("停止位", _cmbStopBits, 112, 48));
+            _rtuSettingsPanel = rtuSettings;
+
+            var networkSettings = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                AutoScroll = true,
+                Visible = false,
+                Margin = new Padding(0)
+            };
+            _txtHost = new TextBox
+            {
+                Text = "127.0.0.1",
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(3, 7, 3, 5)
+            };
+            _txtNetworkPort = new TextBox
+            {
+                Text = "502",
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(3, 7, 3, 5)
+            };
+            networkSettings.Controls.Add(
+                CreateInlineField("IP 地址", _txtHost, 340, 64));
+            networkSettings.Controls.Add(
+                CreateInlineField("端口", _txtNetworkPort, 180, 48));
+            networkSettings.Controls.Add(new Label
+            {
+                Text = "通过网络透传 Modbus RTU 数据帧",
+                AutoSize = true,
+                ForeColor = Color.FromArgb(112, 123, 135),
+                Margin = new Padding(12, 13, 0, 0)
+            });
+            _networkSettingsPanel = networkSettings;
+
+            settingsHost.Controls.Add(networkSettings);
+            settingsHost.Controls.Add(rtuSettings);
+            panel.Controls.Add(settingsHost, 1, 0);
 
             _btnConnect = CreateButton("连接", Connect);
             SetAccentButton(_btnConnect, Color.FromArgb(32, 123, 229));
-            _btnConnect.Dock = DockStyle.Fill;
-            panel.Controls.Add(_btnConnect, 13, 0);
-
             _btnDisconnect = CreateButton("断开", Disconnect);
-            _btnDisconnect.Dock = DockStyle.Fill;
-            panel.Controls.Add(_btnDisconnect, 14, 0);
+            var connectionButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                Margin = new Padding(0),
+                Padding = new Padding(0, 4, 0, 0)
+            };
+            _btnConnect.Width = 84;
+            _btnDisconnect.Width = 84;
+            connectionButtons.Controls.Add(_btnConnect);
+            connectionButtons.Controls.Add(_btnDisconnect);
+            panel.Controls.Add(connectionButtons, 2, 0);
 
             group.Controls.Add(panel);
             _rootLayout.Controls.Add(group, 0, 0);
+        }
+
+        private Control CreateInlineField(
+            string label,
+            Control editor,
+            int width,
+            int labelWidth)
+        {
+            var field = new TableLayoutPanel
+            {
+                Width = width,
+                Height = 42,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0)
+            };
+            field.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Absolute, labelWidth));
+            field.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 100F));
+            AddLabel(field, label, 0, 0);
+            field.Controls.Add(editor, 1, 0);
+            return field;
+        }
+
+        private void TransportChanged(object sender, EventArgs e)
+        {
+            bool isRtu = GetTransportMode() == TransportMode.Rtu;
+            _rtuSettingsPanel.Visible = isRtu;
+            _networkSettingsPanel.Visible = !isRtu;
+            if (isRtu)
+                _rtuSettingsPanel.BringToFront();
+            else
+                _networkSettingsPanel.BringToFront();
+        }
+
+        private TransportMode GetTransportMode()
+        {
+            if (_cmbTransport != null && _cmbTransport.Text == "TCP")
+                return TransportMode.Tcp;
+            if (_cmbTransport != null && _cmbTransport.Text == "UDP")
+                return TransportMode.Udp;
+            return TransportMode.Rtu;
         }
 
         private ComboBox CreateFunctionCombo(
@@ -832,73 +948,101 @@ namespace ModbusAddressTool
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(
-                    _cmbPort.Text))
+                TransportMode mode = GetTransportMode();
+
+                if (mode == TransportMode.Rtu)
                 {
-                    MessageBox.Show(
-                        "请选择串口。");
+                    if (string.IsNullOrWhiteSpace(_cmbPort.Text))
+                    {
+                        MessageBox.Show("请选择串口。");
+                        return;
+                    }
 
-                    return;
-                }
+                    Disconnect();
 
-                Disconnect();
+                    int baud = int.Parse(_cmbBaud.Text);
+                    Parity parity = ParseParity(_cmbParity.Text);
+                    int dataBits = int.Parse(_cmbDataBits.Text);
+                    StopBits stopBits = ParseStopBits(_cmbStopBits.Text);
 
-                int baud =
-                    int.Parse(
-                        _cmbBaud.Text);
-
-                Parity parity =
-                    ParseParity(
-                        _cmbParity.Text);
-
-                int dataBits =
-                    int.Parse(
-                        _cmbDataBits.Text);
-
-                StopBits stopBits =
-                    ParseStopBits(
-                        _cmbStopBits.Text);
-
-                _serialPort =
-                    new SerialPort(
+                    _serialPort = new SerialPort(
                         _cmbPort.Text,
                         baud,
                         parity,
                         dataBits,
                         stopBits);
+                    _serialPort.ReadTimeout = 1500;
+                    _serialPort.WriteTimeout = 1500;
+                    _serialPort.Open();
 
-                _serialPort.ReadTimeout =
-                    1500;
-
-                _serialPort.WriteTimeout =
-                    1500;
-
-                _serialPort.Open();
-
-                SetConnectedState(
-                    true);
-
-                Log(
-                    "串口连接成功：");
-
-                Log(
-                    string.Format(
+                    SetConnectedState(true);
+                    Log("RTU 串口连接成功：");
+                    Log(string.Format(
                         "PORT={0}, Baud={1}, Parity={2}, DataBits={3}, StopBits={4}",
                         _cmbPort.Text,
                         baud,
                         parity,
                         dataBits,
                         stopBits));
+                    return;
+                }
+
+                IPAddress address;
+                int port;
+                if (!IPAddress.TryParse(_txtHost.Text.Trim(), out address))
+                {
+                    MessageBox.Show("请输入有效的 IP 地址。");
+                    return;
+                }
+                if (!int.TryParse(_txtNetworkPort.Text.Trim(), out port) ||
+                    port < 1 || port > 65535)
+                {
+                    MessageBox.Show("端口必须为 1～65535。");
+                    return;
+                }
+
+                Disconnect();
+                if (mode == TransportMode.Tcp)
+                {
+                    _tcpClient = new TcpClient(address.AddressFamily);
+                    _tcpClient.ReceiveTimeout = 1500;
+                    _tcpClient.SendTimeout = 1500;
+                    IAsyncResult result = _tcpClient.BeginConnect(
+                        address,
+                        port,
+                        null,
+                        null);
+                    bool connected = result.AsyncWaitHandle.WaitOne(1500);
+                    result.AsyncWaitHandle.Close();
+                    if (!connected)
+                    {
+                        _tcpClient.Close();
+                        _tcpClient = null;
+                        throw new TimeoutException("TCP 连接超时。");
+                    }
+                    _tcpClient.EndConnect(result);
+                }
+                else
+                {
+                    _udpRemoteEndPoint = new IPEndPoint(address, port);
+                    _udpClient = new UdpClient(address.AddressFamily);
+                    _udpClient.Client.ReceiveTimeout = 1500;
+                    _udpClient.Client.SendTimeout = 1500;
+                    _udpClient.Connect(_udpRemoteEndPoint);
+                }
+
+                SetConnectedState(true);
+                Log(string.Format(
+                    "{0} 连接已就绪：{1}:{2}",
+                    mode == TransportMode.Tcp ? "TCP" : "UDP",
+                    address,
+                    port));
             }
             catch (Exception ex)
             {
-                Log(
-                    "串口连接失败：" +
-                    ex.Message);
-
-                MessageBox.Show(
-                    "连接失败：\r\n" +
-                    ex.Message);
+                Disconnect();
+                Log("连接失败：" + ex.Message);
+                MessageBox.Show("连接失败：\r\n" + ex.Message);
             }
         }
 
@@ -906,6 +1050,11 @@ namespace ModbusAddressTool
             object sender = null,
             EventArgs e = null)
         {
+            bool hadConnection =
+                (_serialPort != null && _serialPort.IsOpen) ||
+                (_tcpClient != null && _tcpClient.Connected) ||
+                _udpClient != null;
+
             try
             {
                 if (_serialPort != null)
@@ -917,6 +1066,12 @@ namespace ModbusAddressTool
 
                     _serialPort.Dispose();
                 }
+
+                if (_tcpClient != null)
+                    _tcpClient.Close();
+
+                if (_udpClient != null)
+                    _udpClient.Close();
             }
             catch
             {
@@ -925,11 +1080,15 @@ namespace ModbusAddressTool
             _serialPort =
                 null;
 
+            _tcpClient = null;
+            _udpClient = null;
+            _udpRemoteEndPoint = null;
+
             SetConnectedState(
                 false);
 
-            Log(
-                "串口已断开。");
+            if (hadConnection)
+                Log("通讯连接已断开。");
         }
 
         private void SetConnectedState(
@@ -947,6 +1106,9 @@ namespace ModbusAddressTool
             _btnRefresh.Enabled =
                 !connected;
 
+            _cmbTransport.Enabled =
+                !connected;
+
             _cmbPort.Enabled =
                 !connected;
 
@@ -960,6 +1122,12 @@ namespace ModbusAddressTool
                 !connected;
 
             _cmbStopBits.Enabled =
+                !connected;
+
+            _txtHost.Enabled =
+                !connected;
+
+            _txtNetworkPort.Enabled =
                 !connected;
 
             _btnRead.Enabled =
@@ -1285,16 +1453,15 @@ namespace ModbusAddressTool
             int minimumLength,
             DeviceProfile device)
         {
-            if (_serialPort == null ||
-                !_serialPort.IsOpen)
-            {
-                throw new InvalidOperationException(
-                    "串口未连接。");
-            }
-
-            _serialPort.DiscardInBuffer();
-
-            _serialPort.DiscardOutBuffer();
+            TransportMode mode = GetTransportMode();
+            bool connected =
+                (mode == TransportMode.Rtu &&
+                    _serialPort != null && _serialPort.IsOpen) ||
+                (mode == TransportMode.Tcp &&
+                    _tcpClient != null && _tcpClient.Connected) ||
+                (mode == TransportMode.Udp && _udpClient != null);
+            if (!connected)
+                throw new InvalidOperationException(mode + " 未连接。");
 
             device.LastTxFrame =
                 BytesToHex(frame);
@@ -1312,54 +1479,13 @@ namespace ModbusAddressTool
                 "TX 长度：" +
                 frame.Length);
 
-            _serialPort.Write(
-                frame,
-                0,
-                frame.Length);
-
-            List<byte> receive =
-                new List<byte>();
-
-            DateTime deadline =
-                DateTime.Now.AddMilliseconds(
-                    1500);
-
-            while (
-                DateTime.Now <
-                deadline)
-            {
-                int count =
-                    _serialPort.BytesToRead;
-
-                if (count > 0)
-                {
-                    byte[] buffer =
-                        new byte[count];
-
-                    int read =
-                        _serialPort.Read(
-                            buffer,
-                            0,
-                            buffer.Length);
-
-                    if (read > 0)
-                    {
-                        receive.AddRange(
-                            buffer);
-                    }
-
-                    if (receive.Count >=
-                        minimumLength)
-                    {
-                        break;
-                    }
-                }
-
-                Thread.Sleep(10);
-            }
-
-            byte[] response =
-                receive.ToArray();
+            byte[] response;
+            if (mode == TransportMode.Rtu)
+                response = ExchangeSerial(frame, minimumLength);
+            else if (mode == TransportMode.Tcp)
+                response = ExchangeTcp(frame, minimumLength);
+            else
+                response = ExchangeUdp(frame);
 
             device.LastRxFrame =
                 BytesToHex(
@@ -1399,6 +1525,84 @@ namespace ModbusAddressTool
             }
 
             return response;
+        }
+
+        private byte[] ExchangeSerial(byte[] frame, int minimumLength)
+        {
+            _serialPort.DiscardInBuffer();
+            _serialPort.DiscardOutBuffer();
+            _serialPort.Write(frame, 0, frame.Length);
+
+            List<byte> receive = new List<byte>();
+            DateTime deadline = DateTime.Now.AddMilliseconds(1500);
+            while (DateTime.Now < deadline)
+            {
+                int count = _serialPort.BytesToRead;
+                if (count > 0)
+                {
+                    byte[] buffer = new byte[count];
+                    int read = _serialPort.Read(buffer, 0, buffer.Length);
+                    if (read > 0)
+                        receive.AddRange(buffer.Take(read));
+                    if (receive.Count >= minimumLength)
+                        break;
+                }
+                Thread.Sleep(10);
+            }
+            return receive.ToArray();
+        }
+
+        private byte[] ExchangeTcp(byte[] frame, int minimumLength)
+        {
+            NetworkStream stream = _tcpClient.GetStream();
+            while (stream.DataAvailable)
+            {
+                byte[] stale = new byte[Math.Max(1, _tcpClient.Available)];
+                stream.Read(stale, 0, stale.Length);
+            }
+
+            stream.Write(frame, 0, frame.Length);
+            stream.Flush();
+
+            List<byte> receive = new List<byte>();
+            DateTime deadline = DateTime.Now.AddMilliseconds(1500);
+            while (DateTime.Now < deadline)
+            {
+                int count = _tcpClient.Available;
+                if (count > 0)
+                {
+                    byte[] buffer = new byte[count];
+                    int read = stream.Read(buffer, 0, buffer.Length);
+                    if (read > 0)
+                        receive.AddRange(buffer.Take(read));
+                    if (receive.Count >= minimumLength)
+                        break;
+                }
+                Thread.Sleep(10);
+            }
+            return receive.ToArray();
+        }
+
+        private byte[] ExchangeUdp(byte[] frame)
+        {
+            while (_udpClient.Available > 0)
+            {
+                IPEndPoint staleRemote = null;
+                _udpClient.Receive(ref staleRemote);
+            }
+
+            _udpClient.Send(frame, frame.Length);
+            try
+            {
+                IPEndPoint remote = null;
+                return _udpClient.Receive(ref remote);
+            }
+            catch (SocketException ex)
+            {
+                if (ex.SocketErrorCode == SocketError.TimedOut)
+                    return new byte[0];
+                throw;
+            }
         }
 
         // ============================================================
