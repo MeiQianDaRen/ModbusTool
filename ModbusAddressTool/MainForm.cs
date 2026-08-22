@@ -209,7 +209,7 @@ namespace ModbusAddressTool
             };
             _cmbPort = CreateDropDown();
             _btnRefresh = CreateButton("刷新", delegate { RefreshPorts(); });
-            _btnRefresh.Width = 64;
+            _btnRefresh.Width = 58;
             _cmbBaud = CreateDropDown();
             _cmbBaud.Items.AddRange(new object[]
             {
@@ -229,16 +229,16 @@ namespace ModbusAddressTool
             _cmbStopBits.SelectedItem = "1";
 
             rtuSettings.Controls.Add(
-                CreateInlineField("串口", _cmbPort, 142, 38));
+                CreateInlineField("串口", _cmbPort, 120, 38));
             rtuSettings.Controls.Add(_btnRefresh);
             rtuSettings.Controls.Add(
-                CreateInlineField("波特率", _cmbBaud, 154, 54));
+                CreateInlineField("波特率", _cmbBaud, 126, 50));
             rtuSettings.Controls.Add(
-                CreateInlineField("校验位", _cmbParity, 150, 54));
+                CreateInlineField("校验位", _cmbParity, 126, 50));
             rtuSettings.Controls.Add(
-                CreateInlineField("数据位", _cmbDataBits, 132, 62));
+                CreateInlineField("数据位", _cmbDataBits, 112, 58));
             rtuSettings.Controls.Add(
-                CreateInlineField("停止位", _cmbStopBits, 132, 62));
+                CreateInlineField("停止位", _cmbStopBits, 112, 58));
             _rtuSettingsPanel = rtuSettings;
 
             var networkSettings = new FlowLayoutPanel
@@ -523,10 +523,10 @@ namespace ModbusAddressTool
             _btnExport = CreateButton("导出", ExportDevices);
             _btnSaveDefault = CreateButton("保存默认", SaveDefaultDevice);
             _btnAdd.Width = 76;
-            _btnDelete.Width = 64;
-            _btnImport.Width = 64;
-            _btnExport.Width = 64;
-            _btnSaveDefault.Width = 88;
+            _btnDelete.Width = 58;
+            _btnImport.Width = 58;
+            _btnExport.Width = 58;
+            _btnSaveDefault.Width = 80;
             fileButtons.Controls.Add(_btnAdd);
             fileButtons.Controls.Add(_btnDelete);
             fileButtons.Controls.Add(_btnImport);
@@ -610,7 +610,7 @@ namespace ModbusAddressTool
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
-                AutoScrollMinSize = new Size(0, 560),
+                AutoScrollMinSize = new Size(0, 460),
                 Margin = new Padding(0)
             };
 
@@ -620,65 +620,56 @@ namespace ModbusAddressTool
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 3,
                 Padding = new Padding(10, 5, 10, 10)
             };
-            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 108F));
             _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
             _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 280F));
-            _deviceEditorLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
 
             var basics = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
-                RowCount = 4,
+                RowCount = 3,
                 Margin = new Padding(0, 0, 0, 8)
             };
             basics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74F));
             basics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             basics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78F));
             basics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            for (int i = 0; i < 4; i++)
-                basics.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+            for (int i = 0; i < 3; i++)
+                basics.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333F));
 
             AddFormLabel(basics, "名称", 0, 0);
             _txtName = CreateTextBox(0);
             _txtName.Dock = DockStyle.Fill;
             basics.Controls.Add(_txtName, 1, 0);
-            basics.SetColumnSpan(_txtName, 3);
 
-            AddFormLabel(basics, "寄存器", 0, 1);
+            AddFormLabel(basics, "寄存器", 2, 0);
             _txtRegister = CreateTextBox(0);
             _txtRegister.Dock = DockStyle.Fill;
-            basics.Controls.Add(_txtRegister, 1, 1);
-            AddFormLabel(basics, "当前地址", 2, 1);
+            basics.Controls.Add(_txtRegister, 3, 0);
+
+            AddFormLabel(basics, "当前地址", 0, 1);
             _txtCurrentAddress = CreateTextBox(0);
             _txtCurrentAddress.Dock = DockStyle.Fill;
-            basics.Controls.Add(_txtCurrentAddress, 3, 1);
+            basics.Controls.Add(_txtCurrentAddress, 1, 1);
 
-            AddFormLabel(basics, "目标地址", 0, 2);
+            AddFormLabel(basics, "目标地址", 2, 1);
             _txtNewAddress = CreateTextBox(0);
             _txtNewAddress.Dock = DockStyle.Fill;
-            basics.Controls.Add(_txtNewAddress, 1, 2);
-            AddFormLabel(basics, "读取功能码", 2, 2);
+            basics.Controls.Add(_txtNewAddress, 3, 1);
+
+            AddFormLabel(basics, "读取功能码", 0, 2);
             _cmbReadFunction = CreateFunctionCombo("03");
             _cmbReadFunction.Dock = DockStyle.Fill;
-            basics.Controls.Add(_cmbReadFunction, 3, 2);
+            basics.Controls.Add(_cmbReadFunction, 1, 2);
 
-            AddFormLabel(basics, "写入功能码", 0, 3);
+            AddFormLabel(basics, "写入功能码", 2, 2);
             _cmbWriteFunction = CreateFunctionCombo("06");
             _cmbWriteFunction.Dock = DockStyle.Fill;
-            basics.Controls.Add(_cmbWriteFunction, 1, 3);
-            basics.Controls.Add(new Label
-            {
-                Text = "支持十进制或十六进制",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                ForeColor = Color.FromArgb(112, 123, 135),
-                Margin = new Padding(7, 0, 0, 0)
-            }, 2, 3);
-            basics.SetColumnSpan(basics.GetControlFromPosition(2, 3), 2);
+            basics.Controls.Add(_cmbWriteFunction, 3, 2);
             _txtRegister.TextChanged += ValidationEditorChanged;
             _txtCurrentAddress.TextChanged += ValidationEditorChanged;
             _cmbReadFunction.TextChanged += ValidationEditorChanged;
@@ -795,7 +786,7 @@ namespace ModbusAddressTool
             customDataToolbar.Controls.Add(_btnDeleteCustomData);
             customDataToolbar.Controls.Add(new Label
             {
-                Text = "目标值为空或与当前值一致时跳过修改",
+                Text = "目标值为空或相同时跳过",
                 AutoSize = true,
                 ForeColor = Color.FromArgb(112, 123, 135),
                 Margin = new Padding(10, 10, 0, 0)
@@ -850,10 +841,22 @@ namespace ModbusAddressTool
             SetAccentButton(_btnWrite, Color.FromArgb(32, 123, 229));
             actions.Controls.Add(_btnRead);
             actions.Controls.Add(_btnWrite);
-            _deviceEditorLayout.Controls.Add(actions, 0, 3);
 
             editorHost.Controls.Add(_deviceEditorLayout);
-            editorGroup.Controls.Add(editorHost);
+            var editorContainer = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(0)
+            };
+            editorContainer.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100F));
+            editorContainer.RowStyles.Add(
+                new RowStyle(SizeType.Absolute, 58F));
+            editorContainer.Controls.Add(editorHost, 0, 0);
+            editorContainer.Controls.Add(actions, 0, 1);
+            editorGroup.Controls.Add(editorContainer);
             split.Panel2.Controls.Add(editorGroup);
             _rootLayout.Controls.Add(split, 0, 1);
         }
