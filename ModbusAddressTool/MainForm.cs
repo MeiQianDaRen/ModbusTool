@@ -878,7 +878,7 @@ namespace ModbusAddressTool
 
         private void InitializeDevices()
         {
-            if (!LoadDefaultDevice())
+            if (!LoadDefaultDevices())
             {
                 _devices.Add(
                     new DeviceProfile
@@ -901,7 +901,7 @@ namespace ModbusAddressTool
             SelectDevice(0);
         }
 
-        private bool LoadDefaultDevice()
+        private bool LoadDefaultDevices()
         {
             string path = GetDefaultProfilePath();
             if (!File.Exists(path))
@@ -910,17 +910,21 @@ namespace ModbusAddressTool
             try
             {
                 var serializer = new DataContractJsonSerializer(
-                    typeof(DeviceProfile));
-                DeviceProfile device;
+                    typeof(List<DeviceProfile>));
+                List<DeviceProfile> devices;
                 using (FileStream stream = File.OpenRead(path))
                 {
-                    device = serializer.ReadObject(stream) as DeviceProfile;
+                    devices = serializer.ReadObject(stream)
+                        as List<DeviceProfile>;
                 }
-                if (device == null)
+                if (devices == null || devices.Count == 0)
                     throw new InvalidDataException("默认配置文件格式错误。");
 
-                _devices.Add(device);
-                Log("已加载默认设备配置：" + path);
+                _devices.AddRange(devices);
+                Log(string.Format(
+                    "已加载默认设备配置：{0}（{1} 台设备）",
+                    path,
+                    devices.Count));
                 return true;
             }
             catch (Exception ex)
@@ -2404,12 +2408,15 @@ namespace ModbusAddressTool
 
             try
             {
-                string path = WriteDefaultDevice();
+                string path = WriteDefaultDevices();
 
                 int index = _selectedIndex;
                 RefreshGrid();
                 SelectDevice(index);
-                Log("当前设备已保存为默认配置：" + path);
+                Log(string.Format(
+                    "全部设备已保存为默认配置：{0}（{1} 台设备）",
+                    path,
+                    _devices.Count));
                 MessageBox.Show(
                     "默认配置已保存。\r\n" + path,
                     "保存成功",
@@ -2427,16 +2434,16 @@ namespace ModbusAddressTool
             }
         }
 
-        private string WriteDefaultDevice()
+        private string WriteDefaultDevices()
         {
             string path = GetDefaultProfilePath();
             var serializer = new DataContractJsonSerializer(
-                typeof(DeviceProfile));
+                typeof(List<DeviceProfile>));
             using (FileStream stream = File.Create(path))
             {
                 serializer.WriteObject(
                     stream,
-                    _devices[_selectedIndex]);
+                    _devices);
             }
             return path;
         }
