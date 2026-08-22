@@ -6,19 +6,59 @@ using System.IO.Ports;
 using System.Linq;
 using System.Runtime.Serialization.Json;
 using System.Text;
-using System.Threading;
 using System.Windows.Forms;
 
 namespace ModbusAddressTool
 {
-    public partial class MainForm : Form
+    public class MainForm : Form
     {
         private SerialPort _serialPort;
 
         private readonly List<DeviceProfile> _devices =
             new List<DeviceProfile>();
 
-        private int _selectedDeviceIndex = -1;
+        private DataGridView _grid;
+
+        private ComboBox _cmbPort;
+        private ComboBox _cmbBaud;
+        private ComboBox _cmbParity;
+        private ComboBox _cmbDataBits;
+        private ComboBox _cmbStopBits;
+
+        private Button _btnConnect;
+        private Button _btnDisconnect;
+        private Button _btnRefresh;
+
+        private ComboBox _cmbReadFunction;
+        private ComboBox _cmbWriteFunction;
+
+        private TextBox _txtName;
+        private TextBox _txtRegister;
+        private TextBox _txtCurrentAddress;
+        private TextBox _txtNewAddress;
+
+        private NumericUpDown _numReadFunction;
+        private NumericUpDown _numWriteFunction;
+
+        private RadioButton _radioInteger;
+        private RadioButton _radioHex;
+        private RadioButton _radioBinary;
+
+        private Button _btnAdd;
+        private Button _btnDelete;
+        private Button _btnRead;
+        private Button _btnWrite;
+        private Button _btnReadAll;
+        private Button _btnWriteAll;
+        private Button _btnImport;
+        private Button _btnExport;
+
+        private RichTextBox _txtLog;
+
+        private int _selectedIndex = -1;
+
+        private DisplayFormat _displayFormat =
+            DisplayFormat.Integer;
 
         private enum DisplayFormat
         {
@@ -27,164 +67,782 @@ namespace ModbusAddressTool
             Binary
         }
 
-        private DisplayFormat _displayFormat = DisplayFormat.Integer;
-
         public MainForm()
         {
-            InitializeComponent();
-        }
+            InitializeForm();
 
-        #region Form
+            InitializeSerialControls();
 
-        private void MainForm_Load(object sender, EventArgs e)
-        {
-            InitializeSerialSettings();
-            InitializeFunctionCodes();
-            InitializeDeviceGrid();
+            InitializeFunctionControls();
+
+            InitializeGrid();
+
+            InitializeDevices();
+
             RefreshPorts();
 
             SetConnectedState(false);
 
-            Log("Modbus RS485 地址修改工具启动。");
-            Log("默认通讯参数：9600 / None / 8 / 1");
+            Log("Modbus RTU 地址修改工具启动。");
+            Log("默认通讯：9600 / None / 8 / 1");
+            Log("读取功能码：03");
+            Log("写入功能码：06");
         }
 
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        // ============================================================
+        // 窗体
+        // ============================================================
+
+        private void InitializeForm()
         {
-            Disconnect();
+            Text = "Modbus RTU RS485 地址修改工具";
+
+            Width = 1280;
+
+            Height = 820;
+
+            StartPosition =
+                FormStartPosition.CenterScreen;
+
+            MinimumSize =
+                new System.Drawing.Size(1000, 650);
+
+            FormClosing += MainForm_FormClosing;
         }
 
-        #endregion
-
-        #region 初始化
-
-        private void InitializeSerialSettings()
+        private void InitializeSerialControls()
         {
-            cboBaud.Items.Clear();
+            var top = new TableLayoutPanel();
 
-            int[] baudRates =
-            {
-                1200,
-                2400,
-                4800,
-                9600,
-                19200,
-                38400,
-                57600,
-                115200
-            };
+            top.Dock = DockStyle.Top;
 
-            foreach (int baud in baudRates)
+            top.Height = 110;
+
+            top.Padding =
+                new Padding(8);
+
+            top.ColumnCount = 12;
+
+            top.RowCount = 2;
+
+            for (int i = 0; i < 12; i++)
             {
-                cboBaud.Items.Add(baud.ToString());
+                top.ColumnStyles.Add(
+                    new ColumnStyle(
+                        SizeType.Percent,
+                        8.333f));
             }
 
-            cboBaud.SelectedItem = "9600";
+            Controls.Add(top);
 
-            cboParity.Items.Clear();
-            cboParity.Items.Add("None");
-            cboParity.Items.Add("Even");
-            cboParity.Items.Add("Odd");
-            cboParity.Items.Add("Mark");
-            cboParity.Items.Add("Space");
-            cboParity.SelectedIndex = 0;
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "串口",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                0,
+                0);
 
-            cboDataBits.Items.Clear();
-            cboDataBits.Items.Add("8");
-            cboDataBits.Items.Add("7");
-            cboDataBits.SelectedItem = "8";
+            _cmbPort = new ComboBox();
 
-            cboStopBits.Items.Clear();
-            cboStopBits.Items.Add("1");
-            cboStopBits.Items.Add("1.5");
-            cboStopBits.Items.Add("2");
-            cboStopBits.SelectedItem = "1";
+            _cmbPort.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+
+            _cmbPort.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbPort,
+                1,
+                0);
+
+            _btnRefresh =
+                new Button
+                {
+                    Text = "刷新串口",
+                    Dock = DockStyle.Fill
+                };
+
+            _btnRefresh.Click +=
+                delegate
+                {
+                    RefreshPorts();
+                };
+
+            top.Controls.Add(
+                _btnRefresh,
+                2,
+                0);
+
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "波特率",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                3,
+                0);
+
+            _cmbBaud = new ComboBox();
+
+            _cmbBaud.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+
+            _cmbBaud.Items.AddRange(
+                new object[]
+                {
+                    "1200",
+                    "2400",
+                    "4800",
+                    "9600",
+                    "19200",
+                    "38400",
+                    "57600",
+                    "115200"
+                });
+
+            _cmbBaud.SelectedItem = "9600";
+
+            _cmbBaud.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbBaud,
+                4,
+                0);
+
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "校验位",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                5,
+                0);
+
+            _cmbParity = new ComboBox();
+
+            _cmbParity.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+
+            _cmbParity.Items.AddRange(
+                new object[]
+                {
+                    "None",
+                    "Even",
+                    "Odd",
+                    "Mark",
+                    "Space"
+                });
+
+            _cmbParity.SelectedIndex = 0;
+
+            _cmbParity.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbParity,
+                6,
+                0);
+
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "数据位",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                7,
+                0);
+
+            _cmbDataBits = new ComboBox();
+
+            _cmbDataBits.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+
+            _cmbDataBits.Items.AddRange(
+                new object[]
+                {
+                    "8",
+                    "7"
+                });
+
+            _cmbDataBits.SelectedItem = "8";
+
+            _cmbDataBits.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbDataBits,
+                8,
+                0);
+
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "停止位",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                9,
+                0);
+
+            _cmbStopBits = new ComboBox();
+
+            _cmbStopBits.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+
+            _cmbStopBits.Items.AddRange(
+                new object[]
+                {
+                    "1",
+                    "1.5",
+                    "2"
+                });
+
+            _cmbStopBits.SelectedItem = "1";
+
+            _cmbStopBits.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbStopBits,
+                10,
+                0);
+
+            var serialButtons =
+                new FlowLayoutPanel();
+
+            serialButtons.Dock =
+                DockStyle.Fill;
+
+            _btnConnect =
+                new Button
+                {
+                    Text = "连接",
+                    Width = 75
+                };
+
+            _btnDisconnect =
+                new Button
+                {
+                    Text = "断开",
+                    Width = 75
+                };
+
+            _btnConnect.Click +=
+                delegate
+                {
+                    Connect();
+                };
+
+            _btnDisconnect.Click +=
+                delegate
+                {
+                    Disconnect();
+                };
+
+            serialButtons.Controls.Add(
+                _btnConnect);
+
+            serialButtons.Controls.Add(
+                _btnDisconnect);
+
+            top.Controls.Add(
+                serialButtons,
+                11,
+                0);
+
+            // 第二行
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "读取功能码",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                0,
+                1);
+
+            _cmbReadFunction =
+                new ComboBox();
+
+            _cmbReadFunction.DropDownStyle =
+                ComboBoxStyle.DropDown;
+
+            _cmbReadFunction.Items.AddRange(
+                new object[]
+                {
+                    "01",
+                    "02",
+                    "03",
+                    "04",
+                    "41",
+                    "42"
+                });
+
+            _cmbReadFunction.Text = "03";
+
+            _cmbReadFunction.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbReadFunction,
+                1,
+                1);
+
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "写入功能码",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleCenter
+                },
+                2,
+                1);
+
+            _cmbWriteFunction =
+                new ComboBox();
+
+            _cmbWriteFunction.DropDownStyle =
+                ComboBoxStyle.DropDown;
+
+            _cmbWriteFunction.Items.AddRange(
+                new object[]
+                {
+                    "05",
+                    "06",
+                    "0F",
+                    "10",
+                    "41",
+                    "42"
+                });
+
+            _cmbWriteFunction.Text = "06";
+
+            _cmbWriteFunction.Dock = DockStyle.Fill;
+
+            top.Controls.Add(
+                _cmbWriteFunction,
+                3,
+                1);
+
+            top.Controls.Add(
+                new Label
+                {
+                    Text = "说明：功能码可直接输入厂家自定义值",
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        System.Drawing.ContentAlignment.MiddleLeft
+                },
+                4,
+                1);
+
+            top.SetColumnSpan(
+                top.Controls[ top.Controls.Count - 1 ],
+                4);
         }
 
-        private void InitializeFunctionCodes()
+        private void InitializeFunctionControls()
         {
-            cboFunction.Items.Clear();
+            var panel =
+                new FlowLayoutPanel();
 
-            cboFunction.Items.Add("06");
-            cboFunction.Items.Add("10");
+            panel.Dock = DockStyle.Top;
 
-            cboFunction.SelectedIndex = 0;
+            panel.Height = 45;
+
+            panel.Padding =
+                new Padding(8);
+
+            _radioInteger =
+                new RadioButton
+                {
+                    Text = "整数",
+                    Checked = true,
+                    AutoSize = true
+                };
+
+            _radioHex =
+                new RadioButton
+                {
+                    Text = "十六进制",
+                    AutoSize = true
+                };
+
+            _radioBinary =
+                new RadioButton
+                {
+                    Text = "二进制",
+                    AutoSize = true
+                };
+
+            _radioInteger.CheckedChanged +=
+                DisplayFormatChanged;
+
+            _radioHex.CheckedChanged +=
+                DisplayFormatChanged;
+
+            _radioBinary.CheckedChanged +=
+                DisplayFormatChanged;
+
+            panel.Controls.Add(
+                new Label
+                {
+                    Text = "数据显示：",
+                    AutoSize = true,
+                    Padding = new Padding(0, 6, 10, 0)
+                });
+
+            panel.Controls.Add(
+                _radioInteger);
+
+            panel.Controls.Add(
+                _radioHex);
+
+            panel.Controls.Add(
+                _radioBinary);
+
+            Controls.Add(panel);
         }
 
-        private void InitializeDeviceGrid()
+        // ============================================================
+        // 设备编辑区域
+        // ============================================================
+
+        private void InitializeGrid()
         {
-            dgvDevices.Columns.Clear();
+            _grid = new DataGridView();
 
-            dgvDevices.Columns.Add("Name", "名称");
-            dgvDevices.Columns.Add("FunctionCode", "功能码");
-            dgvDevices.Columns.Add("Register", "寄存器");
-            dgvDevices.Columns.Add("CurrentAddress", "当前地址");
-            dgvDevices.Columns.Add("NewAddress", "修改地址");
-            dgvDevices.Columns.Add("Status", "状态");
-            dgvDevices.Columns.Add("Time", "时间");
+            _grid.Dock =
+                DockStyle.Fill;
 
-            dgvDevices.Columns["Name"].FillWeight = 130;
-            dgvDevices.Columns["FunctionCode"].FillWeight = 60;
-            dgvDevices.Columns["Register"].FillWeight = 80;
-            dgvDevices.Columns["CurrentAddress"].FillWeight = 80;
-            dgvDevices.Columns["NewAddress"].FillWeight = 80;
-            dgvDevices.Columns["Status"].FillWeight = 150;
-            dgvDevices.Columns["Time"].FillWeight = 140;
+            _grid.AllowUserToAddRows =
+                false;
 
-            RefreshDeviceGrid();
+            _grid.AllowUserToDeleteRows =
+                false;
+
+            _grid.SelectionMode =
+                DataGridViewSelectionMode.FullRowSelect;
+
+            _grid.MultiSelect = false;
+
+            _grid.AutoGenerateColumns = false;
+
+            AddTextColumn(
+                "Name",
+                "名称",
+                150);
+
+            AddTextColumn(
+                "ReadFunction",
+                "读功能码",
+                80);
+
+            AddTextColumn(
+                "WriteFunction",
+                "写功能码",
+                80);
+
+            AddTextColumn(
+                "Register",
+                "寄存器地址",
+                110);
+
+            AddTextColumn(
+                "Current",
+                "当前地址",
+                100);
+
+            AddTextColumn(
+                "New",
+                "修改地址",
+                100);
+
+            AddTextColumn(
+                "Status",
+                "状态",
+                200);
+
+            AddTextColumn(
+                "Time",
+                "时间",
+                150);
+
+            _grid.SelectionChanged +=
+                Grid_SelectionChanged;
+
+            var bottom =
+                new Panel();
+
+            bottom.Dock =
+                DockStyle.Bottom;
+
+            bottom.Height = 110;
+
+            var buttons =
+                new FlowLayoutPanel();
+
+            buttons.Dock =
+                DockStyle.Top;
+
+            buttons.Height = 50;
+
+            buttons.Padding =
+                new Padding(8);
+
+            _btnAdd =
+                CreateButton(
+                    "添加设备",
+                    AddDevice);
+
+            _btnDelete =
+                CreateButton(
+                    "删除设备",
+                    DeleteDevice);
+
+            _btnRead =
+                CreateButton(
+                    "读取当前地址",
+                    ReadSelectedDevice);
+
+            _btnWrite =
+                CreateButton(
+                    "修改地址",
+                    WriteSelectedDevice);
+
+            _btnReadAll =
+                CreateButton(
+                    "读取全部",
+                    ReadAllDevices);
+
+            _btnWriteAll =
+                CreateButton(
+                    "修改全部",
+                    WriteAllDevices);
+
+            _btnImport =
+                CreateButton(
+                    "导入",
+                    ImportDevices);
+
+            _btnExport =
+                CreateButton(
+                    "导出",
+                    ExportDevices);
+
+            buttons.Controls.Add(_btnAdd);
+            buttons.Controls.Add(_btnDelete);
+            buttons.Controls.Add(_btnRead);
+            buttons.Controls.Add(_btnWrite);
+            buttons.Controls.Add(_btnReadAll);
+            buttons.Controls.Add(_btnWriteAll);
+            buttons.Controls.Add(_btnImport);
+            buttons.Controls.Add(_btnExport);
+
+            bottom.Controls.Add(buttons);
+
+            var editor =
+                new FlowLayoutPanel();
+
+            editor.Dock =
+                DockStyle.Bottom;
+
+            editor.Height = 55;
+
+            editor.Padding =
+                new Padding(8);
+
+            editor.WrapContents = false;
+
+            editor.Controls.Add(
+                new Label
+                {
+                    Text = "名称",
+                    Width = 40,
+                    Padding = new Padding(0, 6, 0, 0)
+                });
+
+            _txtName =
+                CreateTextBox(120);
+
+            editor.Controls.Add(_txtName);
+
+            editor.Controls.Add(
+                new Label
+                {
+                    Text = "寄存器",
+                    Width = 55,
+                    Padding = new Padding(0, 6, 0, 0)
+                });
+
+            _txtRegister =
+                CreateTextBox(90);
+
+            editor.Controls.Add(_txtRegister);
+
+            editor.Controls.Add(
+                new Label
+                {
+                    Text = "当前地址",
+                    Width = 65,
+                    Padding = new Padding(0, 6, 0, 0)
+                });
+
+            _txtCurrentAddress =
+                CreateTextBox(70);
+
+            editor.Controls.Add(
+                _txtCurrentAddress);
+
+            editor.Controls.Add(
+                new Label
+                {
+                    Text = "修改地址",
+                    Width = 65,
+                    Padding = new Padding(0, 6, 0, 0)
+                });
+
+            _txtNewAddress =
+                CreateTextBox(70);
+
+            editor.Controls.Add(
+                _txtNewAddress);
+
+            editor.Controls.Add(
+                new Label
+                {
+                    Text = "说明：寄存器地址支持 00D0、0x00D0 或十进制",
+                    AutoSize = true,
+                    Padding = new Padding(10, 6, 0, 0)
+                });
+
+            bottom.Controls.Add(editor);
+
+            Controls.Add(_grid);
+
+            Controls.Add(bottom);
         }
 
-        #endregion
+        private void AddTextColumn(
+            string name,
+            string header,
+            int width)
+        {
+            var column =
+                new DataGridViewTextBoxColumn();
 
-        #region 串口
+            column.Name = name;
+
+            column.HeaderText = header;
+
+            column.Width = width;
+
+            column.ReadOnly = true;
+
+            _grid.Columns.Add(column);
+        }
+
+        private Button CreateButton(
+            string text,
+            EventHandler handler)
+        {
+            var button =
+                new Button
+                {
+                    Text = text,
+                    Width = 100,
+                    Height = 32
+                };
+
+            button.Click += handler;
+
+            return button;
+        }
+
+        private TextBox CreateTextBox(int width)
+        {
+            return new TextBox
+            {
+                Width = width,
+                Height = 28
+            };
+        }
+
+        // ============================================================
+        // 初始化设备
+        // ============================================================
+
+        private void InitializeDevices()
+        {
+            if (_devices.Count == 0)
+            {
+                _devices.Add(
+                    new DeviceProfile
+                    {
+                        Name = "设备1",
+                        ReadFunctionCode = 3,
+                        WriteFunctionCode = 6,
+                        RegisterAddress = 0x00D0,
+                        CurrentAddress = 1,
+                        NewAddress = 2
+                    });
+            }
+
+            RefreshGrid();
+
+            SelectDevice(0);
+        }
+
+        // ============================================================
+        // 串口
+        // ============================================================
 
         private void RefreshPorts()
         {
-            string selected = cboPort.SelectedItem as string;
+            string old =
+                _cmbPort.SelectedItem as string;
 
-            cboPort.Items.Clear();
+            _cmbPort.Items.Clear();
 
-            string[] ports = SerialPort.GetPortNames();
+            string[] ports =
+                SerialPort.GetPortNames();
 
             Array.Sort(ports);
 
             foreach (string port in ports)
             {
-                cboPort.Items.Add(port);
+                _cmbPort.Items.Add(port);
             }
 
-            if (!string.IsNullOrEmpty(selected) &&
-                cboPort.Items.Contains(selected))
+            if (!string.IsNullOrEmpty(old) &&
+                _cmbPort.Items.Contains(old))
             {
-                cboPort.SelectedItem = selected;
+                _cmbPort.SelectedItem = old;
             }
-            else if (cboPort.Items.Count > 0)
+            else if (_cmbPort.Items.Count > 0)
             {
-                cboPort.SelectedIndex = 0;
+                _cmbPort.SelectedIndex = 0;
             }
-        }
 
-        private void btnRefreshPort_Click(object sender, EventArgs e)
-        {
-            RefreshPorts();
-            Log("已刷新串口列表。");
-        }
-
-        private void btnConnect_Click(object sender, EventArgs e)
-        {
-            Connect();
-        }
-
-        private void btnDisconnect_Click(object sender, EventArgs e)
-        {
-            Disconnect();
+            Log(
+                "串口列表：" +
+                (ports.Length == 0
+                    ? "没有发现串口"
+                    : string.Join(", ", ports)));
         }
 
         private void Connect()
         {
             try
             {
-                if (cboPort.SelectedItem == null)
+                if (_cmbPort.SelectedItem == null)
                 {
                     MessageBox.Show(
                         "请选择串口。",
@@ -195,34 +853,42 @@ namespace ModbusAddressTool
                     return;
                 }
 
-                if (_serialPort != null && _serialPort.IsOpen)
-                {
-                    return;
-                }
+                Disconnect();
 
-                string portName = cboPort.SelectedItem.ToString();
+                string port =
+                    _cmbPort.SelectedItem.ToString();
 
-                int baudRate =
-                    int.Parse(cboBaud.SelectedItem.ToString());
+                int baud =
+                    int.Parse(
+                        _cmbBaud.SelectedItem.ToString());
 
                 Parity parity =
-                    ParseParity(cboParity.SelectedItem.ToString());
+                    ParseParity(
+                        _cmbParity.SelectedItem.ToString());
 
                 int dataBits =
-                    int.Parse(cboDataBits.SelectedItem.ToString());
+                    int.Parse(
+                        _cmbDataBits.SelectedItem.ToString());
 
                 StopBits stopBits =
-                    ParseStopBits(cboStopBits.SelectedItem.ToString());
+                    ParseStopBits(
+                        _cmbStopBits.SelectedItem.ToString());
 
-                _serialPort = new SerialPort(
-                    portName,
-                    baudRate,
-                    parity,
-                    dataBits,
-                    stopBits);
+                _serialPort =
+                    new SerialPort(
+                        port,
+                        baud,
+                        parity,
+                        dataBits,
+                        stopBits);
 
-                _serialPort.ReadTimeout = 1000;
-                _serialPort.WriteTimeout = 1000;
+                _serialPort.ReadTimeout = 1200;
+
+                _serialPort.WriteTimeout = 1200;
+
+                _serialPort.ReadBufferSize = 4096;
+
+                _serialPort.WriteBufferSize = 4096;
 
                 _serialPort.Open();
 
@@ -230,9 +896,9 @@ namespace ModbusAddressTool
 
                 Log(
                     string.Format(
-                        "已连接：{0}, {1}, {2}, {3}Bits, {4}StopBits",
-                        portName,
-                        baudRate,
+                        "连接成功：{0} / {1} / {2} / {3}Bits / {4}",
+                        port,
+                        baud,
                         parity,
                         dataBits,
                         stopBits));
@@ -241,24 +907,13 @@ namespace ModbusAddressTool
             {
                 Log("连接失败：" + ex.Message);
 
-                if (_serialPort != null)
-                {
-                    try
-                    {
-                        _serialPort.Dispose();
-                    }
-                    catch
-                    {
-                    }
-
-                    _serialPort = null;
-                }
-
                 MessageBox.Show(
                     "连接失败：\r\n" + ex.Message,
-                    "连接错误",
+                    "错误",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
+
+                Disconnect();
             }
         }
 
@@ -274,35 +929,59 @@ namespace ModbusAddressTool
                     }
 
                     _serialPort.Dispose();
-                    _serialPort = null;
                 }
             }
             catch
             {
             }
 
+            _serialPort = null;
+
             SetConnectedState(false);
         }
 
-        private void SetConnectedState(bool connected)
+        private void SetConnectedState(
+            bool connected)
         {
-            btnConnect.Enabled = !connected;
-            btnDisconnect.Enabled = connected;
+            _btnConnect.Enabled =
+                !connected;
 
-            cboPort.Enabled = !connected;
-            cboBaud.Enabled = !connected;
-            cboParity.Enabled = !connected;
-            cboDataBits.Enabled = !connected;
-            cboStopBits.Enabled = !connected;
-            btnRefreshPort.Enabled = !connected;
+            _btnDisconnect.Enabled =
+                connected;
 
-            btnRead.Enabled = connected;
-            btnWrite.Enabled = connected;
-            btnReadAll.Enabled = connected;
-            btnWriteAll.Enabled = connected;
+            _cmbPort.Enabled =
+                !connected;
+
+            _cmbBaud.Enabled =
+                !connected;
+
+            _cmbParity.Enabled =
+                !connected;
+
+            _cmbDataBits.Enabled =
+                !connected;
+
+            _cmbStopBits.Enabled =
+                !connected;
+
+            _btnRefresh.Enabled =
+                !connected;
+
+            _btnRead.Enabled =
+                connected;
+
+            _btnWrite.Enabled =
+                connected;
+
+            _btnReadAll.Enabled =
+                connected;
+
+            _btnWriteAll.Enabled =
+                connected;
         }
 
-        private static Parity ParseParity(string value)
+        private static Parity ParseParity(
+            string value)
         {
             switch (value)
             {
@@ -323,7 +1002,8 @@ namespace ModbusAddressTool
             }
         }
 
-        private static StopBits ParseStopBits(string value)
+        private static StopBits ParseStopBits(
+            string value)
         {
             switch (value)
             {
@@ -338,63 +1018,11 @@ namespace ModbusAddressTool
             }
         }
 
-        #endregion
+        // ============================================================
+        // 地址解析
+        // ============================================================
 
-        #region 数据格式
-
-        private void DisplayFormatChanged(object sender, EventArgs e)
-        {
-            if (radioInteger.Checked)
-            {
-                _displayFormat = DisplayFormat.Integer;
-            }
-            else if (radioHex.Checked)
-            {
-                _displayFormat = DisplayFormat.Hex;
-            }
-            else
-            {
-                _displayFormat = DisplayFormat.Binary;
-            }
-
-            RefreshDeviceGrid();
-        }
-
-        private string FormatValue(ushort value)
-        {
-            switch (_displayFormat)
-            {
-                case DisplayFormat.Hex:
-                    return "0x" + value.ToString("X4");
-
-                case DisplayFormat.Binary:
-                    return Convert.ToString(value, 2).PadLeft(16, '0');
-
-                default:
-                    return value.ToString();
-            }
-        }
-
-        private string FormatAddress(byte value)
-        {
-            switch (_displayFormat)
-            {
-                case DisplayFormat.Hex:
-                    return "0x" + value.ToString("X2");
-
-                case DisplayFormat.Binary:
-                    return Convert.ToString(value, 2).PadLeft(8, '0');
-
-                default:
-                    return value.ToString();
-            }
-        }
-
-        #endregion
-
-        #region 地址输入解析
-
-        private bool TryParseRegisterAddress(
+        private static bool TryParseRegister(
             string text,
             out ushort value)
         {
@@ -407,7 +1035,9 @@ namespace ModbusAddressTool
 
             text = text.Trim();
 
-            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            if (text.StartsWith(
+                "0x",
+                StringComparison.OrdinalIgnoreCase))
             {
                 return ushort.TryParse(
                     text.Substring(2),
@@ -416,10 +1046,10 @@ namespace ModbusAddressTool
                     out value);
             }
 
-            // 含 A-F，自动按照十六进制处理
-            if (text.Any(c =>
-                (c >= 'A' && c <= 'F') ||
-                (c >= 'a' && c <= 'f')))
+            if (text.Any(
+                c =>
+                    (c >= 'A' && c <= 'F') ||
+                    (c >= 'a' && c <= 'f')))
             {
                 return ushort.TryParse(
                     text,
@@ -428,8 +1058,6 @@ namespace ModbusAddressTool
                     out value);
             }
 
-            // 例如 00D3 会走上面的十六进制
-            // 纯数字默认按照十进制。
             return ushort.TryParse(
                 text,
                 NumberStyles.Integer,
@@ -437,7 +1065,7 @@ namespace ModbusAddressTool
                 out value);
         }
 
-        private bool TryParseAddress(
+        private static bool TryParseAddress(
             string text,
             out byte value)
         {
@@ -450,165 +1078,132 @@ namespace ModbusAddressTool
 
             text = text.Trim();
 
-            int parsed;
+            int number;
 
-            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            bool ok;
+
+            if (text.StartsWith(
+                "0x",
+                StringComparison.OrdinalIgnoreCase))
             {
-                if (!int.TryParse(
-                    text.Substring(2),
-                    NumberStyles.HexNumber,
-                    CultureInfo.InvariantCulture,
-                    out parsed))
-                {
-                    return false;
-                }
+                ok =
+                    int.TryParse(
+                        text.Substring(2),
+                        NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture,
+                        out number);
             }
-            else if (text.Any(c =>
-                (c >= 'A' && c <= 'F') ||
-                (c >= 'a' && c <= 'f')))
+            else if (
+                text.Any(
+                    c =>
+                        (c >= 'A' && c <= 'F') ||
+                        (c >= 'a' && c <= 'f')))
             {
-                if (!int.TryParse(
-                    text,
-                    NumberStyles.HexNumber,
-                    CultureInfo.InvariantCulture,
-                    out parsed))
-                {
-                    return false;
-                }
+                ok =
+                    int.TryParse(
+                        text,
+                        NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture,
+                        out number);
             }
             else
             {
-                if (!int.TryParse(
-                    text,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out parsed))
-                {
-                    return false;
-                }
+                ok =
+                    int.TryParse(
+                        text,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out number);
             }
 
-            if (parsed < 1 || parsed > 247)
+            if (!ok)
             {
                 return false;
             }
 
-            value = (byte)parsed;
+            if (number < 1 || number > 247)
+            {
+                return false;
+            }
+
+            value = (byte)number;
 
             return true;
         }
 
-        #endregion
-
-        #region Modbus RTU
-
-        private byte[] BuildReadHoldingRegistersFrame(
-            byte slaveAddress,
-            ushort registerAddress,
-            ushort registerCount)
+        private static bool TryParseFunctionCode(
+            string text,
+            out byte value)
         {
-            byte[] frame = new byte[6];
+            value = 0;
 
-            frame[0] = slaveAddress;
-            frame[1] = 0x03;
-
-            frame[2] = (byte)(registerAddress >> 8);
-            frame[3] = (byte)(registerAddress & 0xFF);
-
-            frame[4] = (byte)(registerCount >> 8);
-            frame[5] = (byte)(registerCount & 0xFF);
-
-            return AddCrc(frame);
-        }
-
-        private byte[] BuildWriteSingleRegisterFrame(
-            byte slaveAddress,
-            ushort registerAddress,
-            ushort value)
-        {
-            byte[] frame = new byte[6];
-
-            frame[0] = slaveAddress;
-            frame[1] = 0x06;
-
-            frame[2] = (byte)(registerAddress >> 8);
-            frame[3] = (byte)(registerAddress & 0xFF);
-
-            frame[4] = (byte)(value >> 8);
-            frame[5] = (byte)(value & 0xFF);
-
-            return AddCrc(frame);
-        }
-
-        private byte[] BuildWriteMultipleRegistersFrame(
-            byte slaveAddress,
-            ushort registerAddress,
-            ushort[] values)
-        {
-            if (values == null || values.Length == 0)
+            if (string.IsNullOrWhiteSpace(text))
             {
-                throw new ArgumentException("没有要写入的数据。");
+                return false;
             }
 
-            byte[] frame = new byte[7 + values.Length * 2];
+            text = text.Trim();
 
-            frame[0] = slaveAddress;
-            frame[1] = 0x10;
+            int number;
 
-            frame[2] = (byte)(registerAddress >> 8);
-            frame[3] = (byte)(registerAddress & 0xFF);
+            bool ok;
 
-            frame[4] = (byte)(values.Length >> 8);
-            frame[5] = (byte)(values.Length & 0xFF);
-
-            frame[6] = (byte)(values.Length * 2);
-
-            for (int i = 0; i < values.Length; i++)
+            if (text.StartsWith(
+                "0x",
+                StringComparison.OrdinalIgnoreCase))
             {
-                frame[7 + i * 2] =
-                    (byte)(values[i] >> 8);
-
-                frame[8 + i * 2] =
-                    (byte)(values[i] & 0xFF);
+                ok =
+                    int.TryParse(
+                        text.Substring(2),
+                        NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture,
+                        out number);
+            }
+            else
+            {
+                ok =
+                    int.TryParse(
+                        text,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out number);
             }
 
-            return AddCrc(frame);
+            if (!ok ||
+                number < 1 ||
+                number > 255)
+            {
+                return false;
+            }
+
+            value = (byte)number;
+
+            return true;
         }
 
-        private byte[] AddCrc(byte[] frameWithoutCrc)
-        {
-            ushort crc = CalculateCrc16(frameWithoutCrc);
+        // ============================================================
+        // CRC16
+        // ============================================================
 
-            byte[] frame =
-                new byte[frameWithoutCrc.Length + 2];
-
-            Buffer.BlockCopy(
-                frameWithoutCrc,
-                0,
-                frame,
-                0,
-                frameWithoutCrc.Length);
-
-            // Modbus RTU CRC：低字节在前
-            frame[frame.Length - 2] = (byte)(crc & 0xFF);
-            frame[frame.Length - 1] = (byte)(crc >> 8);
-
-            return frame;
-        }
-
-        private static ushort CalculateCrc16(byte[] data)
+        private static ushort CalculateCrc16(
+            byte[] data)
         {
             ushort crc = 0xFFFF;
 
-            for (int pos = 0; pos < data.Length; pos++)
+            for (int i = 0;
+                 i < data.Length;
+                 i++)
             {
-                crc ^= data[pos];
+                crc ^= data[i];
 
-                for (int i = 8; i != 0; i--)
+                for (int j = 0;
+                     j < 8;
+                     j++)
                 {
-                    if ((crc & 0x0001) != 0)
+                    if ((crc & 1) != 0)
                     {
                         crc >>= 1;
+
                         crc ^= 0xA001;
                     }
                     else
@@ -621,17 +1216,39 @@ namespace ModbusAddressTool
             return crc;
         }
 
-        private bool ValidateCrc(byte[] frame)
+        private static byte[] AddCrc(
+            byte[] data)
         {
-            if (frame == null || frame.Length < 4)
+            ushort crc =
+                CalculateCrc16(data);
+
+            byte[] frame =
+                new byte[data.Length + 2];
+
+            Buffer.BlockCopy(
+                data,
+                0,
+                frame,
+                0,
+                data.Length);
+
+            frame[frame.Length - 2] =
+                (byte)(crc & 0xFF);
+
+            frame[frame.Length - 1] =
+                (byte)(crc >> 8);
+
+            return frame;
+        }
+
+        private static bool CheckCrc(
+            byte[] frame)
+        {
+            if (frame == null ||
+                frame.Length < 4)
             {
                 return false;
             }
-
-            ushort received =
-                (ushort)(
-                    frame[frame.Length - 2] |
-                    (frame[frame.Length - 1] << 8));
 
             byte[] data =
                 new byte[frame.Length - 2];
@@ -646,41 +1263,119 @@ namespace ModbusAddressTool
             ushort calculated =
                 CalculateCrc16(data);
 
-            return received == calculated;
+            ushort received =
+                (ushort)(
+                    frame[frame.Length - 2] |
+                    (frame[frame.Length - 1] << 8));
+
+            return calculated == received;
         }
 
-        #endregion
+        // ============================================================
+        // Modbus RTU 帧
+        // ============================================================
 
-        #region 通讯
+        private static byte[] BuildReadFrame(
+            byte slave,
+            byte function,
+            ushort register,
+            ushort count)
+        {
+            byte[] body =
+            {
+                slave,
+                function,
+                (byte)(register >> 8),
+                (byte)(register & 0xFF),
+                (byte)(count >> 8),
+                (byte)(count & 0xFF)
+            };
+
+            return AddCrc(body);
+        }
+
+        private static byte[] BuildWriteSingleFrame(
+            byte slave,
+            byte function,
+            ushort register,
+            ushort value)
+        {
+            byte[] body =
+            {
+                slave,
+                function,
+                (byte)(register >> 8),
+                (byte)(register & 0xFF),
+                (byte)(value >> 8),
+                (byte)(value & 0xFF)
+            };
+
+            return AddCrc(body);
+        }
+
+        private static byte[] BuildWriteMultipleFrame(
+            byte slave,
+            byte function,
+            ushort register,
+            ushort value)
+        {
+            byte[] body =
+            {
+                slave,
+                function,
+                (byte)(register >> 8),
+                (byte)(register & 0xFF),
+
+                0x00,
+                0x01,
+
+                0x02,
+
+                (byte)(value >> 8),
+                (byte)(value & 0xFF)
+            };
+
+            return AddCrc(body);
+        }
+
+        // ============================================================
+        // 发送 / 接收
+        // ============================================================
 
         private byte[] SendAndReceive(
             byte[] request,
-            int expectedLength,
-            int timeoutMilliseconds = 1000)
+            int minimumResponseLength)
         {
             if (_serialPort == null ||
                 !_serialPort.IsOpen)
             {
                 throw new InvalidOperationException(
-                    "串口未连接。");
+                    "串口尚未连接。");
             }
 
             _serialPort.DiscardInBuffer();
+
             _serialPort.DiscardOutBuffer();
 
-            Log("TX: " + BytesToString(request));
+            Log(
+                "TX: " +
+                BytesToHex(request));
 
-            _serialPort.Write(request, 0, request.Length);
+            _serialPort.Write(
+                request,
+                0,
+                request.Length);
 
-            List<byte> received =
+            List<byte> response =
                 new List<byte>();
 
-            DateTime start = DateTime.Now;
+            DateTime deadline =
+                DateTime.Now.AddMilliseconds(1500);
 
-            while ((DateTime.Now - start).TotalMilliseconds <
-                   timeoutMilliseconds)
+            while (DateTime.Now < deadline)
             {
-                int available = _serialPort.BytesToRead;
+                int available =
+                    _serialPort.BytesToRead;
 
                 if (available > 0)
                 {
@@ -693,971 +1388,663 @@ namespace ModbusAddressTool
                             0,
                             buffer.Length);
 
-                    for (int i = 0; i < count; i++)
+                    if (count > 0)
                     {
-                        received.Add(buffer[i]);
+                        response.AddRange(
+                            buffer);
                     }
 
-                    if (received.Count >= expectedLength)
+                    if (response.Count >=
+                        minimumResponseLength)
                     {
                         break;
                     }
                 }
-
-                Thread.Sleep(5);
+                else
+                {
+                    System.Threading.Thread.Sleep(10);
+                }
             }
 
-            if (received.Count == 0)
+            if (response.Count == 0)
             {
                 throw new TimeoutException(
                     "设备没有返回数据。");
             }
 
-            byte[] response =
-                received.ToArray();
+            byte[] result =
+                response.ToArray();
 
-            Log("RX: " + BytesToString(response));
+            Log(
+                "RX: " +
+                BytesToHex(result));
 
-            if (!ValidateCrc(response))
+            if (!CheckCrc(result))
             {
                 throw new InvalidDataException(
-                    "Modbus CRC 校验失败。");
+                    "返回数据 CRC 校验失败。");
             }
 
-            return response;
+            return result;
         }
 
-        private ushort ReadRegister(
-            byte slaveAddress,
-            ushort registerAddress)
-        {
-            byte[] request =
-                BuildReadHoldingRegistersFrame(
-                    slaveAddress,
-                    registerAddress,
-                    1);
+        // ============================================================
+        // 读取当前地址
+        // ============================================================
 
-            byte[] response =
-                SendAndReceive(
-                    request,
-                    7,
-                    1200);
-
-            if (response.Length < 7)
-            {
-                throw new InvalidDataException(
-                    "读取响应长度错误。");
-            }
-
-            if (response[0] != slaveAddress)
-            {
-                throw new InvalidDataException(
-                    "返回设备地址不一致。");
-            }
-
-            if (response[1] == 0x83)
-            {
-                throw new InvalidDataException(
-                    string.Format(
-                        "设备返回异常码：0x{0:X2}",
-                        response[2]));
-            }
-
-            if (response[1] != 0x03)
-            {
-                throw new InvalidDataException(
-                    string.Format(
-                        "返回功能码错误：0x{0:X2}",
-                        response[1]));
-            }
-
-            if (response[2] != 2)
-            {
-                throw new InvalidDataException(
-                    "读取寄存器数据长度错误。");
-            }
-
-            ushort value =
-                (ushort)(
-                    (response[3] << 8) |
-                    response[4]);
-
-            return value;
-        }
-
-        private void WriteRegister(
-            byte slaveAddress,
-            ushort registerAddress,
-            byte functionCode,
-            byte newAddress)
-        {
-            byte[] request;
-
-            if (functionCode == 0x06)
-            {
-                request =
-                    BuildWriteSingleRegisterFrame(
-                        slaveAddress,
-                        registerAddress,
-                        newAddress);
-            }
-            else if (functionCode == 0x10)
-            {
-                request =
-                    BuildWriteMultipleRegistersFrame(
-                        slaveAddress,
-                        registerAddress,
-                        new ushort[]
-                        {
-                            newAddress
-                        });
-            }
-            else
-            {
-                throw new NotSupportedException(
-                    "当前仅支持功能码 06 和 10。");
-            }
-
-            int expectedLength =
-                functionCode == 0x06
-                    ? 8
-                    : 8;
-
-            byte[] response =
-                SendAndReceive(
-                    request,
-                    expectedLength,
-                    1200);
-
-            if (response.Length < 8)
-            {
-                throw new InvalidDataException(
-                    "写入响应长度错误。");
-            }
-
-            if (response[0] != slaveAddress)
-            {
-                throw new InvalidDataException(
-                    "写入返回地址不一致。");
-            }
-
-            if (response[1] ==
-                (byte)(functionCode | 0x80))
-            {
-                throw new InvalidDataException(
-                    string.Format(
-                        "设备返回异常码：0x{0:X2}",
-                        response[2]));
-            }
-
-            if (response[1] != functionCode)
-            {
-                throw new InvalidDataException(
-                    string.Format(
-                        "写入返回功能码错误：0x{0:X2}",
-                        response[1]));
-            }
-        }
-
-        #endregion
-
-        #region 读取
-
-        private void btnRead_Click(object sender, EventArgs e)
+        private bool ReadDevice(
+            DeviceProfile device)
         {
             try
             {
-                ushort register;
-                byte currentAddress;
+                byte function =
+                    device.ReadFunctionCode;
 
-                if (!TryReadFormValues(
-                    out register,
-                    out currentAddress,
-                    false))
+                ushort register =
+                    device.RegisterAddress;
+
+                byte[] request;
+
+                if (function == 1 ||
+                    function == 2 ||
+                    function == 3 ||
+                    function == 4)
                 {
-                    return;
+                    request =
+                        BuildReadFrame(
+                            device.CurrentAddress,
+                            function,
+                            register,
+                            device.RegisterCount);
+                }
+                else
+                {
+                    /*
+                     * 厂家自定义功能码：
+                     *
+                     * 默认仍采用：
+                     *
+                     * 地址
+                     * 功能码
+                     * 寄存器高
+                     * 寄存器低
+                     * 数量高
+                     * 数量低
+                     * CRC
+                     *
+                     * 如果厂家协议不同，
+                     * 后续可以在这里扩展。
+                     */
+
+                    request =
+                        BuildReadFrame(
+                            device.CurrentAddress,
+                            function,
+                            register,
+                            device.RegisterCount);
                 }
 
-                Log(
-                    string.Format(
-                        "开始读取：设备地址={0}，寄存器={1}",
-                        FormatAddress(currentAddress),
-                        FormatValue(register)));
+                byte[] response =
+                    SendAndReceive(
+                        request,
+                        5);
+
+                if (response.Length < 5)
+                {
+                    throw new InvalidDataException(
+                        "返回数据长度不足。");
+                }
+
+                if (response[0] !=
+                    device.CurrentAddress)
+                {
+                    throw new InvalidDataException(
+                        "返回设备地址与请求地址不一致。");
+                }
+
+                if (response[1] != function)
+                {
+                    if ((response[1] & 0x80) != 0)
+                    {
+                        byte exceptionCode =
+                            response.Length > 2
+                                ? response[2]
+                                : (byte)0;
+
+                        throw new InvalidDataException(
+                            string.Format(
+                                "Modbus 异常响应，异常码：0x{0:X2}",
+                                exceptionCode));
+                    }
+
+                    throw new InvalidDataException(
+                        "返回功能码不一致。");
+                }
+
+                int byteCount =
+                    response[2];
+
+                if (response.Length <
+                    3 + byteCount + 2)
+                {
+                    throw new InvalidDataException(
+                        "返回数据长度错误。");
+                }
+
+                if (byteCount < 2)
+                {
+                    throw new InvalidDataException(
+                        "返回寄存器数据不足。");
+                }
 
                 ushort value =
-                    ReadRegister(
-                        currentAddress,
-                        register);
+                    (ushort)(
+                        (response[3] << 8) |
+                        response[4]);
 
-                txtCurrentAddress.Text =
-                    FormatAddress((byte)value);
-
-                Log(
-                    string.Format(
-                        "读取成功：寄存器 {0} = {1}",
-                        FormatValue(register),
-                        FormatAddress((byte)value)));
-
-                if (value < 1 || value > 247)
+                if (value < 1 ||
+                    value > 247)
                 {
-                    Log(
-                        "警告：读取到的地址不在 Modbus 标准地址 1~247 范围内。");
+                    throw new InvalidDataException(
+                        "读取到的地址值不在 1～247 范围内：" +
+                        value);
                 }
+
+                device.CurrentAddress =
+                    (byte)value;
+
+                device.MarkStatus(
+                    "读取成功：" +
+                    FormatAddress(
+                        device.CurrentAddress));
+
+                return true;
             }
             catch (Exception ex)
             {
-                Log("读取失败：" + ex.Message);
+                device.MarkStatus(
+                    "读取失败：" +
+                    ex.Message);
 
-                MessageBox.Show(
-                    "读取失败：\r\n" + ex.Message,
-                    "读取失败",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                Log(
+                    "读取失败：" +
+                    ex.Message);
+
+                return false;
             }
         }
 
-        private bool TryReadFormValues(
-            out ushort register,
-            out byte currentAddress,
-            bool validateNewAddress)
-        {
-            register = 0;
-            currentAddress = 0;
+        // ============================================================
+        // 修改地址
+        // ============================================================
 
-            if (!TryParseRegisterAddress(
-                txtRegister.Text,
-                out register))
-            {
-                MessageBox.Show(
-                    "寄存器地址格式错误。\r\n例如：00D3、211、0x00D3",
-                    "输入错误",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-
-                txtRegister.Focus();
-                return false;
-            }
-
-            if (!TryParseAddress(
-                txtCurrentAddress.Text,
-                out currentAddress))
-            {
-                MessageBox.Show(
-                    "当前地址必须是 1~247。",
-                    "输入错误",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-
-                txtCurrentAddress.Focus();
-                return false;
-            }
-
-            if (validateNewAddress)
-            {
-                byte newAddress;
-
-                if (!TryParseAddress(
-                    txtNewAddress.Text,
-                    out newAddress))
-                {
-                    MessageBox.Show(
-                        "修改地址必须是 1~247。",
-                        "输入错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-
-                    txtNewAddress.Focus();
-                    return false;
-                }
-
-                if (newAddress == currentAddress)
-                {
-                    MessageBox.Show(
-                        "修改地址不能和当前地址相同。",
-                        "输入错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
-
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        #endregion
-
-        #region 修改地址
-
-        private void btnWrite_Click(object sender, EventArgs e)
+        private bool WriteDevice(
+            DeviceProfile device)
         {
             try
             {
-                ushort register;
-                byte currentAddress;
+                byte oldAddress =
+                    device.CurrentAddress;
 
-                if (!TryReadFormValues(
-                    out register,
-                    out currentAddress,
-                    true))
+                byte newAddress =
+                    device.NewAddress;
+
+                if (oldAddress < 1 ||
+                    oldAddress > 247)
                 {
-                    return;
+                    throw new ArgumentException(
+                        "当前地址必须在 1～247。");
                 }
 
-                byte newAddress;
-
-                if (!TryParseAddress(
-                    txtNewAddress.Text,
-                    out newAddress))
+                if (newAddress < 1 ||
+                    newAddress > 247)
                 {
-                    return;
+                    throw new ArgumentException(
+                        "修改地址必须在 1～247。");
                 }
 
-                if (IsNewAddressUsedByOtherDevice(
-                    newAddress,
-                    -1))
+                if (oldAddress == newAddress)
                 {
-                    DialogResult result =
-                        MessageBox.Show(
-                            "设备列表中已经存在相同的新地址：" +
-                            FormatAddress(newAddress) +
-                            "\r\n\r\n继续修改可能造成 RS485 地址冲突。\r\n是否继续？",
-                            "地址冲突警告",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning);
+                    throw new ArgumentException(
+                        "当前地址与修改地址不能相同。");
+                }
 
-                    if (result != DialogResult.Yes)
+                byte function =
+                    device.WriteFunctionCode;
+
+                byte[] request;
+
+                if (function == 6)
+                {
+                    request =
+                        BuildWriteSingleFrame(
+                            oldAddress,
+                            function,
+                            device.RegisterAddress,
+                            newAddress);
+                }
+                else if (function == 16)
+                {
+                    request =
+                        BuildWriteMultipleFrame(
+                            oldAddress,
+                            function,
+                            device.RegisterAddress,
+                            newAddress);
+                }
+                else
+                {
+                    /*
+                     * 厂家自定义写入功能码：
+                     *
+                     * 默认采用类似 06 的结构：
+                     *
+                     * 地址
+                     * 功能码
+                     * 寄存器高
+                     * 寄存器低
+                     * 新地址高
+                     * 新地址低
+                     * CRC
+                     *
+                     * 如果厂家协议完全不同，
+                     * 可以继续扩展这里。
+                     */
+
+                    request =
+                        BuildWriteSingleFrame(
+                            oldAddress,
+                            function,
+                            device.RegisterAddress,
+                            newAddress);
+                }
+
+                byte[] response =
+                    SendAndReceive(
+                        request,
+                        8);
+
+                /*
+                 * 标准 06：
+                 *
+                 * 回复应该与请求数据区一致。
+                 */
+
+                if (response.Length >= 6)
+                {
+                    if (response[0] != oldAddress)
                     {
-                        return;
+                        throw new InvalidDataException(
+                            "写入响应地址不一致。");
+                    }
+
+                    if (response[1] != function)
+                    {
+                        if ((response[1] & 0x80) != 0)
+                        {
+                            byte exceptionCode =
+                                response.Length > 2
+                                    ? response[2]
+                                    : (byte)0;
+
+                            throw new InvalidDataException(
+                                string.Format(
+                                    "设备拒绝修改，异常码：0x{0:X2}",
+                                    exceptionCode));
+                        }
+
+                        throw new InvalidDataException(
+                            "写入响应功能码不一致。");
                     }
                 }
 
-                DialogResult confirm =
-                    MessageBox.Show(
-                        string.Format(
-                            "确定修改设备地址吗？\r\n\r\n当前地址：{0}\r\n修改地址：{1}\r\n寄存器：{2}\r\n功能码：{3}",
-                            FormatAddress(currentAddress),
-                            FormatAddress(newAddress),
-                            FormatRegister(register),
-                            cboFunction.SelectedItem),
-                        "确认修改",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
+                /*
+                 * 很多设备改地址后会立即切换到新地址。
+                 *
+                 * 因此这里把当前地址先改成新地址。
+                 */
 
-                if (confirm != DialogResult.Yes)
-                {
-                    return;
-                }
+                device.CurrentAddress =
+                    newAddress;
 
-                byte functionCode =
-                    byte.Parse(
-                        cboFunction.SelectedItem.ToString(),
-                        NumberStyles.HexNumber);
-
-                Log(
+                device.MarkStatus(
                     string.Format(
-                        "开始修改地址：{0} → {1}",
-                        FormatAddress(currentAddress),
+                        "修改成功：{0} → {1}",
+                        FormatAddress(oldAddress),
                         FormatAddress(newAddress)));
 
-                WriteRegister(
-                    currentAddress,
-                    register,
-                    functionCode,
-                    newAddress);
-
-                Log("写入成功。");
-
-                // 设备地址已经改变
-                Thread.Sleep(100);
-
-                Log(
-                    "开始使用新地址进行验证：" +
-                    FormatAddress(newAddress));
-
-                ushort verifyValue =
-                    ReadRegister(
-                        newAddress,
-                        register);
-
-                if (verifyValue != newAddress)
-                {
-                    throw new InvalidDataException(
-                        string.Format(
-                            "验证失败。设备返回地址为 {0}，期望 {1}。",
-                            verifyValue,
-                            newAddress));
-                }
-
-                txtCurrentAddress.Text =
-                    FormatAddress(newAddress);
-
                 Log(
                     string.Format(
-                        "修改成功，验证通过：{0} → {1}",
-                        FormatAddress(currentAddress),
+                        "地址修改成功：{0} → {1}",
+                        FormatAddress(oldAddress),
                         FormatAddress(newAddress)));
 
-                MessageBox.Show(
-                    string.Format(
-                        "地址修改成功！\r\n\r\n{0} → {1}\r\n验证通过。",
-                        FormatAddress(currentAddress),
-                        FormatAddress(newAddress)),
-                    "成功",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                return true;
             }
             catch (Exception ex)
             {
-                Log("修改失败：" + ex.Message);
+                device.MarkStatus(
+                    "修改失败：" +
+                    ex.Message);
 
-                MessageBox.Show(
-                    "地址修改失败：\r\n" + ex.Message,
-                    "修改失败",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                Log(
+                    "修改失败：" +
+                    ex.Message);
+
+                return false;
             }
         }
 
-        #endregion
+        // ============================================================
+        // 修改后验证
+        // ============================================================
 
-        #region 设备列表
-
-        private DeviceProfile ReadDeviceFromForm()
-        {
-            ushort register;
-
-            if (!TryParseRegisterAddress(
-                txtRegister.Text,
-                out register))
-            {
-                throw new ArgumentException(
-                    "寄存器地址格式错误。");
-            }
-
-            byte currentAddress;
-
-            if (!TryParseAddress(
-                txtCurrentAddress.Text,
-                out currentAddress))
-            {
-                throw new ArgumentException(
-                    "当前地址必须为 1~247。");
-            }
-
-            byte newAddress;
-
-            if (!TryParseAddress(
-                txtNewAddress.Text,
-                out newAddress))
-            {
-                throw new ArgumentException(
-                    "修改地址必须为 1~247。");
-            }
-
-            byte functionCode =
-                byte.Parse(
-                    cboFunction.SelectedItem.ToString(),
-                    NumberStyles.HexNumber);
-
-            return new DeviceProfile
-            {
-                Name = txtName.Text.Trim(),
-                FunctionCode = functionCode,
-                RegisterAddress = register,
-                CurrentAddress = currentAddress,
-                NewAddress = newAddress,
-                Status = "",
-                LastOperationTime = ""
-            };
-        }
-
-        private void btnAdd_Click(object sender, EventArgs e)
+        private bool VerifyNewAddress(
+            DeviceProfile device)
         {
             try
             {
-                DeviceProfile device =
-                    ReadDeviceFromForm();
+                /*
+                 * 修改完成后：
+                 *
+                 * 设备地址应该已经从旧地址
+                 * 变成新地址。
+                 *
+                 * 因此使用新地址再次读取。
+                 */
 
-                if (string.IsNullOrWhiteSpace(device.Name))
+                byte newAddress =
+                    device.NewAddress;
+
+                byte function =
+                    device.ReadFunctionCode;
+
+                byte[] request =
+                    BuildReadFrame(
+                        newAddress,
+                        function,
+                        device.RegisterAddress,
+                        device.RegisterCount);
+
+                byte[] response =
+                    SendAndReceive(
+                        request,
+                        5);
+
+                if (response[0] != newAddress)
                 {
-                    device.Name =
-                        "设备" + (_devices.Count + 1);
+                    throw new InvalidDataException(
+                        "验证返回地址不正确。");
                 }
 
-                _devices.Add(device);
+                if (response[1] != function)
+                {
+                    throw new InvalidDataException(
+                        "验证返回功能码不正确。");
+                }
 
-                RefreshDeviceGrid();
+                int byteCount =
+                    response[2];
+
+                if (byteCount < 2)
+                {
+                    throw new InvalidDataException(
+                        "验证数据不足。");
+                }
+
+                ushort value =
+                    (ushort)(
+                        (response[3] << 8) |
+                        response[4]);
+
+                if (value != newAddress)
+                {
+                    throw new InvalidDataException(
+                        string.Format(
+                            "验证失败：寄存器返回 {0}，期望 {1}",
+                            value,
+                            newAddress));
+                }
+
+                device.CurrentAddress =
+                    newAddress;
+
+                device.MarkStatus(
+                    "修改并验证成功：" +
+                    FormatAddress(newAddress));
 
                 Log(
-                    "已添加设备：" +
-                    device.Name);
+                    "修改后验证成功。");
+
+                return true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    ex.Message,
-                    "添加设备失败",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+                device.MarkStatus(
+                    "修改成功，但验证失败：" +
+                    ex.Message);
+
+                Log(
+                    "修改后验证失败：" +
+                    ex.Message);
+
+                return false;
             }
         }
 
-        private void btnDelete_Click(object sender, EventArgs e)
+        // ============================================================
+        // 按钮操作
+        // ============================================================
+
+        private void AddDevice(
+            object sender,
+            EventArgs e)
         {
-            int index =
-                GetSelectedDeviceIndex();
+            int number =
+                _devices.Count + 1;
 
-            if (index < 0)
+            _devices.Add(
+                new DeviceProfile
+                {
+                    Name =
+                        "设备" + number
+                });
+
+            RefreshGrid();
+
+            SelectDevice(
+                _devices.Count - 1);
+        }
+
+        private void DeleteDevice(
+            object sender,
+            EventArgs e)
+        {
+            if (_selectedIndex < 0 ||
+                _selectedIndex >= _devices.Count)
             {
-                MessageBox.Show(
-                    "请选择一个设备。",
-                    "提示",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-
                 return;
             }
 
-            _devices.RemoveAt(index);
+            if (MessageBox.Show(
+                "确定删除当前设备？",
+                "确认",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question)
+                != DialogResult.Yes)
+            {
+                return;
+            }
 
-            _selectedDeviceIndex = -1;
+            _devices.RemoveAt(
+                _selectedIndex);
 
-            RefreshDeviceGrid();
-
-            Log("已删除选中设备。");
-        }
-
-        private void btnClear_Click(object sender, EventArgs e)
-        {
             if (_devices.Count == 0)
             {
-                return;
+                _devices.Add(
+                    new DeviceProfile
+                    {
+                        Name = "设备1"
+                    });
             }
 
-            DialogResult result =
-                MessageBox.Show(
-                    "确定清空全部设备吗？",
-                    "确认",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
+            RefreshGrid();
 
-            if (result != DialogResult.Yes)
-            {
-                return;
-            }
-
-            _devices.Clear();
-
-            _selectedDeviceIndex = -1;
-
-            RefreshDeviceGrid();
-
-            Log("已清空设备列表。");
+            SelectDevice(
+                Math.Min(
+                    _selectedIndex,
+                    _devices.Count - 1));
         }
 
-        private void dgvDevices_CellDoubleClick(
+        private void ReadSelectedDevice(
             object sender,
-            DataGridViewCellEventArgs e)
+            EventArgs e)
         {
-            if (e.RowIndex < 0 ||
-                e.RowIndex >= _devices.Count)
+            if (!SaveEditorToSelected())
             {
                 return;
             }
 
-            LoadDeviceToForm(e.RowIndex);
-        }
-
-        private int GetSelectedDeviceIndex()
-        {
-            if (dgvDevices.SelectedRows.Count == 0)
-            {
-                return -1;
-            }
-
-            return dgvDevices.SelectedRows[0].Index;
-        }
-
-        private void LoadDeviceToForm(int index)
-        {
-            if (index < 0 ||
-                index >= _devices.Count)
+            if (_selectedIndex < 0)
             {
                 return;
             }
 
             DeviceProfile device =
-                _devices[index];
+                _devices[_selectedIndex];
 
-            _selectedDeviceIndex = index;
+            ReadDevice(device);
 
-            txtName.Text = device.Name;
+            RefreshGrid();
 
-            cboFunction.SelectedItem =
-                device.FunctionCode.ToString("X2");
-
-            txtRegister.Text =
-                FormatRegister(device.RegisterAddress);
-
-            txtCurrentAddress.Text =
-                FormatAddress(device.CurrentAddress);
-
-            txtNewAddress.Text =
-                FormatAddress(device.NewAddress);
-
-            Log(
-                "已加载设备：" +
-                device.Name);
+            SelectDevice(_selectedIndex);
         }
 
-        private void RefreshDeviceGrid()
+        private void WriteSelectedDevice(
+            object sender,
+            EventArgs e)
         {
-            if (dgvDevices == null)
+            if (!SaveEditorToSelected())
             {
                 return;
             }
 
-            dgvDevices.Rows.Clear();
-
-            foreach (DeviceProfile device in _devices)
+            if (_selectedIndex < 0)
             {
-                dgvDevices.Rows.Add(
-                    device.Name,
-                    device.FunctionCode.ToString("X2"),
-                    FormatRegister(device.RegisterAddress),
-                    FormatAddress(device.CurrentAddress),
-                    FormatAddress(device.NewAddress),
-                    device.Status,
-                    device.LastOperationTime);
+                return;
             }
+
+            DeviceProfile device =
+                _devices[_selectedIndex];
+
+            if (MessageBox.Show(
+                string.Format(
+                    "确定将地址 {0} 修改为 {1}？",
+                    device.CurrentAddress,
+                    device.NewAddress),
+                "确认修改",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning)
+                != DialogResult.Yes)
+            {
+                return;
+            }
+
+            bool ok =
+                WriteDevice(device);
+
+            if (ok)
+            {
+                /*
+                 * 修改后自动验证。
+                 */
+
+                VerifyNewAddress(device);
+            }
+
+            RefreshGrid();
+
+            SelectDevice(_selectedIndex);
         }
 
-        private string FormatRegister(ushort register)
+        private void ReadAllDevices(
+            object sender,
+            EventArgs e)
         {
-            switch (_displayFormat)
+            for (int i = 0;
+                 i < _devices.Count;
+                 i++)
             {
-                case DisplayFormat.Hex:
-                    return register.ToString("X4");
-
-                case DisplayFormat.Binary:
-                    return Convert.ToString(
-                        register,
-                        2).PadLeft(16, '0');
-
-                default:
-                    return register.ToString();
-            }
-        }
-
-        private bool IsNewAddressUsedByOtherDevice(
-            byte newAddress,
-            int exceptIndex)
-        {
-            for (int i = 0; i < _devices.Count; i++)
-            {
-                if (i == exceptIndex)
+                if (!SaveEditorToDevice(
+                    _devices[i]))
                 {
                     continue;
                 }
 
-                if (_devices[i].NewAddress == newAddress)
-                {
-                    return true;
-                }
-            }
+                ReadDevice(
+                    _devices[i]);
 
-            return false;
-        }
-
-        #endregion
-
-        #region 读取全部
-
-        private void btnReadAll_Click(object sender, EventArgs e)
-        {
-            if (_devices.Count == 0)
-            {
-                MessageBox.Show(
-                    "设备列表为空。",
-                    "提示",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-
-                return;
-            }
-
-            foreach (DeviceProfile device in _devices)
-            {
-                try
-                {
-                    Log(
-                        string.Format(
-                            "读取设备：{0}，地址={1}",
-                            device.Name,
-                            FormatAddress(device.CurrentAddress)));
-
-                    ushort value =
-                        ReadRegister(
-                            device.CurrentAddress,
-                            device.RegisterAddress);
-
-                    if (value < 1 || value > 247)
-                    {
-                        device.MarkStatus(
-                            "读取成功，但地址值非法：" +
-                            value);
-                    }
-                    else
-                    {
-                        device.CurrentAddress =
-                            (byte)value;
-
-                        device.MarkStatus(
-                            "读取成功：" +
-                            FormatAddress((byte)value));
-                    }
-
-                    Log(
-                        string.Format(
-                            "{0} 读取结果：{1}",
-                            device.Name,
-                            FormatAddress((byte)value)));
-                }
-                catch (Exception ex)
-                {
-                    device.MarkStatus(
-                        "读取失败：" +
-                        ex.Message);
-
-                    Log(
-                        string.Format(
-                            "{0} 读取失败：{1}",
-                            device.Name,
-                            ex.Message));
-                }
-
-                RefreshDeviceGrid();
+                RefreshGrid();
 
                 Application.DoEvents();
-
-                Thread.Sleep(100);
             }
-
-            MessageBox.Show(
-                "全部读取完成。",
-                "完成",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
         }
 
-        #endregion
-
-        #region 修改全部
-
-        private void btnWriteAll_Click(object sender, EventArgs e)
+        private void WriteAllDevices(
+            object sender,
+            EventArgs e)
         {
-            if (_devices.Count == 0)
-            {
-                MessageBox.Show(
-                    "设备列表为空。",
-                    "提示",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-
-                return;
-            }
-
-            List<string> duplicateAddresses =
-                _devices
-                    .GroupBy(x => x.NewAddress)
-                    .Where(x => x.Count() > 1)
-                    .Select(x => FormatAddress(x.Key))
-                    .ToList();
-
-            if (duplicateAddresses.Count > 0)
-            {
-                MessageBox.Show(
-                    "发现重复的新地址：\r\n\r\n" +
-                    string.Join(
-                        ", ",
-                        duplicateAddresses) +
-                    "\r\n\r\n请先修改重复地址，否则可能造成总线冲突。",
-                    "地址冲突",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-
-                return;
-            }
-
-            DialogResult confirm =
-                MessageBox.Show(
-                    "确定批量修改全部设备地址吗？\r\n\r\n" +
-                    "程序会逐台执行：\r\n" +
-                    "1. 使用当前地址读取\r\n" +
-                    "2. 写入新地址\r\n" +
-                    "3. 切换到新地址\r\n" +
-                    "4. 重新读取验证\r\n" +
-                    "5. 记录结果",
-                    "批量修改确认",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
-
-            if (confirm != DialogResult.Yes)
+            if (MessageBox.Show(
+                "确定按照列表中的当前地址和修改地址批量修改？",
+                "确认批量修改",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning)
+                != DialogResult.Yes)
             {
                 return;
             }
 
-            int success = 0;
-            int failed = 0;
-
-            for (int i = 0; i < _devices.Count; i++)
+            for (int i = 0;
+                 i < _devices.Count;
+                 i++)
             {
                 DeviceProfile device =
                     _devices[i];
 
-                try
+                if (!SaveEditorToDevice(device))
                 {
-                    Log(
-                        "================================");
-
-                    Log(
-                        string.Format(
-                            "开始修改：{0}",
-                            device.Name));
-
-                    Log(
-                        string.Format(
-                            "地址：{0} → {1}",
-                            FormatAddress(device.CurrentAddress),
-                            FormatAddress(device.NewAddress)));
-
-                    // 1. 先读取当前寄存器
-                    ushort currentValue =
-                        ReadRegister(
-                            device.CurrentAddress,
-                            device.RegisterAddress);
-
-                    Log(
-                        string.Format(
-                            "读取当前地址寄存器值：{0}",
-                            FormatAddress((byte)currentValue)));
-
-                    // 如果设备实际寄存器地址和配置不一致
-                    if (currentValue != device.CurrentAddress)
-                    {
-                        Log(
-                            "警告：寄存器中的当前地址与设备列表中的当前地址不同。");
-
-                        device.CurrentAddress =
-                            (byte)currentValue;
-                    }
-
-                    // 2. 写入
-                    WriteRegister(
-                        device.CurrentAddress,
-                        device.RegisterAddress,
-                        device.FunctionCode,
-                        device.NewAddress);
-
-                    Log("写入新地址成功。");
-
-                    // 3. 等待设备保存
-                    Thread.Sleep(150);
-
-                    // 4. 使用新地址验证
-                    ushort verifyValue =
-                        ReadRegister(
-                            device.NewAddress,
-                            device.RegisterAddress);
-
-                    if (verifyValue != device.NewAddress)
-                    {
-                        throw new InvalidDataException(
-                            string.Format(
-                                "验证失败：返回 {0}，期望 {1}",
-                                verifyValue,
-                                device.NewAddress));
-                    }
-
-                    device.CurrentAddress =
-                        device.NewAddress;
-
-                    device.MarkStatus(
-                        "修改成功");
-
-                    success++;
-
-                    Log(
-                        string.Format(
-                            "修改成功并验证通过：{0}",
-                            device.Name));
-                }
-                catch (Exception ex)
-                {
-                    device.MarkStatus(
-                        "失败：" + ex.Message);
-
-                    failed++;
-
-                    Log(
-                        string.Format(
-                            "修改失败：{0} - {1}",
-                            device.Name,
-                            ex.Message));
+                    continue;
                 }
 
-                RefreshDeviceGrid();
+                if (WriteDevice(device))
+                {
+                    VerifyNewAddress(device);
+                }
+
+                RefreshGrid();
 
                 Application.DoEvents();
-
-                Thread.Sleep(200);
             }
-
-            Log("================================");
-            Log(
-                string.Format(
-                    "批量修改完成：成功 {0} 台，失败 {1} 台。",
-                    success,
-                    failed));
-
-            MessageBox.Show(
-                string.Format(
-                    "批量修改完成！\r\n\r\n成功：{0} 台\r\n失败：{1} 台",
-                    success,
-                    failed),
-                "完成",
-                MessageBoxButtons.OK,
-                failed == 0
-                    ? MessageBoxIcon.Information
-                    : MessageBoxIcon.Warning);
         }
 
-        #endregion
+        // ============================================================
+        // 导入 / 导出
+        // ============================================================
 
-        #region 导入导出 JSON
-
-        private void btnExport_Click(object sender, EventArgs e)
+        private void ExportDevices(
+            object sender,
+            EventArgs e)
         {
-            if (_devices.Count == 0)
-            {
-                MessageBox.Show(
-                    "没有设备可以导出。",
-                    "提示",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-
-                return;
-            }
+            SaveEditorToSelected();
 
             using (SaveFileDialog dialog =
-                   new SaveFileDialog())
+                new SaveFileDialog())
             {
                 dialog.Filter =
                     "JSON 文件 (*.json)|*.json";
 
                 dialog.FileName =
-                    "Modbus设备地址配置.json";
+                    "ModbusAddressDevices.json";
 
                 if (dialog.ShowDialog() !=
                     DialogResult.OK)
@@ -1667,15 +2054,12 @@ namespace ModbusAddressTool
 
                 try
                 {
-                    DataContractJsonSerializer serializer =
+                    var serializer =
                         new DataContractJsonSerializer(
                             typeof(List<DeviceProfile>));
 
                     using (FileStream stream =
-                           new FileStream(
-                               dialog.FileName,
-                               FileMode.Create,
-                               FileAccess.Write))
+                        File.Create(dialog.FileName))
                     {
                         serializer.WriteObject(
                             stream,
@@ -1683,30 +2067,24 @@ namespace ModbusAddressTool
                     }
 
                     Log(
-                        "设备配置已导出：" +
+                        "导出成功：" +
                         dialog.FileName);
-
-                    MessageBox.Show(
-                        "导出成功。",
-                        "完成",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(
-                        "导出失败：\r\n" + ex.Message,
-                        "错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
+                        "导出失败：\r\n" +
+                        ex.Message);
                 }
             }
         }
 
-        private void btnImport_Click(object sender, EventArgs e)
+        private void ImportDevices(
+            object sender,
+            EventArgs e)
         {
             using (OpenFileDialog dialog =
-                   new OpenFileDialog())
+                new OpenFileDialog())
             {
                 dialog.Filter =
                     "JSON 文件 (*.json)|*.json";
@@ -1719,159 +2097,51 @@ namespace ModbusAddressTool
 
                 try
                 {
-                    DataContractJsonSerializer serializer =
+                    var serializer =
                         new DataContractJsonSerializer(
                             typeof(List<DeviceProfile>));
 
-                    List<DeviceProfile> imported;
+                    List<DeviceProfile> result;
 
                     using (FileStream stream =
-                           new FileStream(
-                               dialog.FileName,
-                               FileMode.Open,
-                               FileAccess.Read))
+                        File.OpenRead(dialog.FileName))
                     {
-                        imported =
+                        result =
                             serializer.ReadObject(stream)
                             as List<DeviceProfile>;
                     }
 
-                    if (imported == null)
+                    if (result == null)
                     {
                         throw new InvalidDataException(
-                            "JSON 文件内容无效。");
+                            "JSON 数据格式错误。");
                     }
 
                     _devices.Clear();
 
-                    foreach (DeviceProfile device in imported)
+                    _devices.AddRange(result);
+
+                    if (_devices.Count == 0)
                     {
-                        if (device.FunctionCode != 0x06 &&
-                            device.FunctionCode != 0x10)
-                        {
-                            device.FunctionCode = 0x06;
-                        }
-
-                        if (device.CurrentAddress < 1 ||
-                            device.CurrentAddress > 247)
-                        {
-                            device.CurrentAddress = 1;
-                        }
-
-                        if (device.NewAddress < 1 ||
-                            device.NewAddress > 247)
-                        {
-                            device.NewAddress = 2;
-                        }
-
-                        _devices.Add(device);
+                        _devices.Add(
+                            new DeviceProfile
+                            {
+                                Name = "设备1"
+                            });
                     }
 
-                    RefreshDeviceGrid();
+                    RefreshGrid();
+
+                    SelectDevice(0);
 
                     Log(
-                        string.Format(
-                            "已导入 {0} 台设备：{1}",
-                            _devices.Count,
-                            dialog.FileName));
-
-                    MessageBox.Show(
-                        string.Format(
-                            "导入成功，共 {0} 台设备。",
-                            _devices.Count),
-                        "完成",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(
-                        "导入失败：\r\n" + ex.Message,
-                        "错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
-            }
-        }
-
-        #endregion
-
-        #region CSV
-
-        private void btnExportCsv_Click(
-            object sender,
-            EventArgs e)
-        {
-            if (_devices.Count == 0)
-            {
-                MessageBox.Show(
-                    "没有设备可以导出。",
-                    "提示",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-
-                return;
-            }
-
-            using (SaveFileDialog dialog =
-                   new SaveFileDialog())
-            {
-                dialog.Filter =
-                    "CSV 文件 (*.csv)|*.csv";
-
-                dialog.FileName =
-                    "Modbus地址修改记录.csv";
-
-                if (dialog.ShowDialog() !=
-                    DialogResult.OK)
-                {
-                    return;
-                }
-
-                try
-                {
-                    StringBuilder builder =
-                        new StringBuilder();
-
-                    builder.AppendLine(
-                        "名称,功能码,寄存器地址,当前地址,修改地址,状态,时间");
-
-                    foreach (DeviceProfile device in _devices)
-                    {
-                        builder.AppendLine(
-                            string.Join(
-                                ",",
-                                Csv(device.Name),
-                                device.FunctionCode.ToString("X2"),
-                                Csv(FormatRegister(
-                                    device.RegisterAddress)),
-                                Csv(FormatAddress(
-                                    device.CurrentAddress)),
-                                Csv(FormatAddress(
-                                    device.NewAddress)),
-                                Csv(device.Status),
-                                Csv(device.LastOperationTime)));
-                    }
-
-                    File.WriteAllText(
-                        dialog.FileName,
-                        builder.ToString(),
-                        new UTF8Encoding(true));
-
-                    Log(
-                        "修改记录已导出：" +
+                        "导入成功：" +
                         dialog.FileName);
-
-                    MessageBox.Show(
-                        "CSV 导出成功。",
-                        "完成",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(
-                        "CSV 导出失败：\r\n" +
+                        "导入失败：\r\n" +
                         ex.Message,
                         "错误",
                         MessageBoxButtons.OK,
@@ -1880,59 +2150,361 @@ namespace ModbusAddressTool
             }
         }
 
-        private static string Csv(string value)
+        // ============================================================
+        // Grid
+        // ============================================================
+
+        private void RefreshGrid()
         {
-            if (value == null)
-            {
-                return "\"\"";
-            }
-
-            return "\"" +
-                   value.Replace("\"", "\"\"") +
-                   "\"";
-        }
-
-        #endregion
-
-        #region 日志
-
-        private void Log(string message)
-        {
-            if (txtLog == null)
+            if (_grid == null)
             {
                 return;
             }
 
-            string line =
-                string.Format(
-                    "[{0}] {1}",
-                    DateTime.Now.ToString("HH:mm:ss.fff"),
-                    message);
+            _grid.Rows.Clear();
 
-            txtLog.AppendText(
-                line +
-                Environment.NewLine);
+            foreach (DeviceProfile device
+                in _devices)
+            {
+                int row =
+                    _grid.Rows.Add();
 
-            txtLog.SelectionStart =
-                txtLog.TextLength;
+                _grid.Rows[row].Cells["Name"].Value =
+                    device.Name;
 
-            txtLog.ScrollToCaret();
+                _grid.Rows[row].Cells["ReadFunction"].Value =
+                    device.ReadFunctionCode.ToString("X2");
+
+                _grid.Rows[row].Cells["WriteFunction"].Value =
+                    device.WriteFunctionCode.ToString("X2");
+
+                _grid.Rows[row].Cells["Register"].Value =
+                    FormatRegister(
+                        device.RegisterAddress);
+
+                _grid.Rows[row].Cells["Current"].Value =
+                    FormatAddress(
+                        device.CurrentAddress);
+
+                _grid.Rows[row].Cells["New"].Value =
+                    FormatAddress(
+                        device.NewAddress);
+
+                _grid.Rows[row].Cells["Status"].Value =
+                    device.Status;
+
+                _grid.Rows[row].Cells["Time"].Value =
+                    device.LastOperationTime;
+            }
         }
 
-        private static string BytesToString(byte[] data)
+        private void Grid_SelectionChanged(
+            object sender,
+            EventArgs e)
         {
-            if (data == null ||
-                data.Length == 0)
+            if (_grid.SelectedRows.Count == 0)
+            {
+                return;
+            }
+
+            int index =
+                _grid.SelectedRows[0].Index;
+
+            if (index >= 0 &&
+                index < _devices.Count)
+            {
+                _selectedIndex =
+                    index;
+
+                LoadDeviceToEditor(
+                    _devices[index]);
+            }
+        }
+
+        private void SelectDevice(
+            int index)
+        {
+            if (_grid == null ||
+                index < 0 ||
+                index >= _grid.Rows.Count)
+            {
+                return;
+            }
+
+            _selectedIndex = index;
+
+            _grid.ClearSelection();
+
+            _grid.Rows[index].Selected =
+                true;
+
+            LoadDeviceToEditor(
+                _devices[index]);
+        }
+
+        private void LoadDeviceToEditor(
+            DeviceProfile device)
+        {
+            _txtName.Text =
+                device.Name;
+
+            _txtRegister.Text =
+                FormatRegister(
+                    device.RegisterAddress);
+
+            _txtCurrentAddress.Text =
+                FormatAddress(
+                    device.CurrentAddress);
+
+            _txtNewAddress.Text =
+                FormatAddress(
+                    device.NewAddress);
+
+            _cmbReadFunction.Text =
+                device.ReadFunctionCode.ToString("X2");
+
+            _cmbWriteFunction.Text =
+                device.WriteFunctionCode.ToString("X2");
+        }
+
+        private bool SaveEditorToSelected()
+        {
+            if (_selectedIndex < 0 ||
+                _selectedIndex >= _devices.Count)
+            {
+                return false;
+            }
+
+            return SaveEditorToDevice(
+                _devices[_selectedIndex]);
+        }
+
+        private bool SaveEditorToDevice(
+            DeviceProfile device)
+        {
+            byte readFunction;
+
+            byte writeFunction;
+
+            ushort register;
+
+            byte currentAddress;
+
+            byte newAddress;
+
+            if (!TryParseFunctionCode(
+                _cmbReadFunction.Text,
+                out readFunction))
+            {
+                MessageBox.Show(
+                    "读取功能码无效。",
+                    "输入错误");
+
+                return false;
+            }
+
+            if (!TryParseFunctionCode(
+                _cmbWriteFunction.Text,
+                out writeFunction))
+            {
+                MessageBox.Show(
+                    "写入功能码无效。",
+                    "输入错误");
+
+                return false;
+            }
+
+            if (!TryParseRegister(
+                _txtRegister.Text,
+                out register))
+            {
+                MessageBox.Show(
+                    "寄存器地址无效。\r\n\r\n例如：00D0、0x00D0、208",
+                    "输入错误");
+
+                return false;
+            }
+
+            if (!TryParseAddress(
+                _txtCurrentAddress.Text,
+                out currentAddress))
+            {
+                MessageBox.Show(
+                    "当前地址必须是 1～247。",
+                    "输入错误");
+
+                return false;
+            }
+
+            if (!TryParseAddress(
+                _txtNewAddress.Text,
+                out newAddress))
+            {
+                MessageBox.Show(
+                    "修改地址必须是 1～247。",
+                    "输入错误");
+
+                return false;
+            }
+
+            device.Name =
+                _txtName.Text.Trim();
+
+            device.ReadFunctionCode =
+                readFunction;
+
+            device.WriteFunctionCode =
+                writeFunction;
+
+            device.RegisterAddress =
+                register;
+
+            device.CurrentAddress =
+                currentAddress;
+
+            device.NewAddress =
+                newAddress;
+
+            return true;
+        }
+
+        // ============================================================
+        // 显示格式
+        // ============================================================
+
+        private void DisplayFormatChanged(
+            object sender,
+            EventArgs e)
+        {
+            if (_radioHex.Checked)
+            {
+                _displayFormat =
+                    DisplayFormat.Hex;
+            }
+            else if (_radioBinary.Checked)
+            {
+                _displayFormat =
+                    DisplayFormat.Binary;
+            }
+            else
+            {
+                _displayFormat =
+                    DisplayFormat.Integer;
+            }
+
+            RefreshGrid();
+        }
+
+        private string FormatAddress(
+            byte value)
+        {
+            switch (_displayFormat)
+            {
+                case DisplayFormat.Hex:
+
+                    return "0x" +
+                           value.ToString("X2");
+
+                case DisplayFormat.Binary:
+
+                    return Convert.ToString(
+                        value,
+                        2).PadLeft(
+                            8,
+                            '0');
+
+                default:
+
+                    return value.ToString();
+            }
+        }
+
+        private string FormatRegister(
+            ushort value)
+        {
+            return value.ToString("X4");
+        }
+
+        // ============================================================
+        // 日志
+        // ============================================================
+
+        private void Log(
+            string message)
+        {
+            if (_txtLog == null)
+            {
+                EnsureLogControl();
+            }
+
+            if (_txtLog == null)
+            {
+                return;
+            }
+
+            _txtLog.AppendText(
+                string.Format(
+                    "[{0}] {1}\r\n",
+                    DateTime.Now.ToString(
+                        "HH:mm:ss.fff"),
+                    message));
+
+            _txtLog.SelectionStart =
+                _txtLog.TextLength;
+
+            _txtLog.ScrollToCaret();
+        }
+
+        private void EnsureLogControl()
+        {
+            if (_txtLog != null)
+            {
+                return;
+            }
+
+            _txtLog =
+                new RichTextBox();
+
+            _txtLog.Dock =
+                DockStyle.Bottom;
+
+            _txtLog.Height =
+                150;
+
+            _txtLog.ReadOnly =
+                true;
+
+            _txtLog.Font =
+                new System.Drawing.Font(
+                    "Consolas",
+                    9);
+
+            Controls.Add(_txtLog);
+        }
+
+        private static string BytesToHex(
+            byte[] bytes)
+        {
+            if (bytes == null)
             {
                 return "";
             }
 
             return string.Join(
                 " ",
-                data.Select(
+                bytes.Select(
                     b => b.ToString("X2")));
         }
 
-        #endregion
+        // ============================================================
+        // 关闭
+        // ============================================================
+
+        private void MainForm_FormClosing(
+            object sender,
+            FormClosingEventArgs e)
+        {
+            Disconnect();
+        }
     }
 }
