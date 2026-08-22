@@ -1147,7 +1147,9 @@ namespace ModbusAddressTool
                         ports)));
         }
 
-        private void Connect()
+        private void Connect(
+            object sender,
+            EventArgs e)
         {
             try
             {
@@ -2399,7 +2401,30 @@ namespace ModbusAddressTool
                 _grid.Rows[row]
                     .Cells["Status"]
                     .Value =
-                    device.Status;
+                    device.LastResult;
+                _grid.Rows[row]
+                    .Cells["Current"]
+                    .Value =
+                    FormatValue(
+                        device.CurrentAddress);
+            
+                _grid.Rows[row]
+                    .Cells["New"]
+                    .Value =
+                    FormatValue(
+                        device.NewAddress);
+            
+                _grid.Rows[row]
+                    .Cells["Custom"]
+                    .Value =
+                    device.UseCustomWriteFrame
+                        ? "是"
+                        : "否";
+            
+                _grid.Rows[row]
+                    .Cells["Status"]
+                    .Value =
+                    device.LastResult;                    
             }
         }
 
