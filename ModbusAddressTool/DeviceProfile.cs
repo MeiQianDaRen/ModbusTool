@@ -1,8 +1,41 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 
 namespace ModbusAddressTool
 {
+    [DataContract]
+    public class CustomRegisterItem
+    {
+        [DataMember(Order = 1)]
+        public string Name { get; set; }
+
+        [DataMember(Order = 2)]
+        public ushort RegisterAddress { get; set; }
+
+        [DataMember(Order = 3)]
+        public ushort? CurrentValue { get; set; }
+
+        [DataMember(Order = 4)]
+        public ushort? TargetValue { get; set; }
+
+        public CustomRegisterItem()
+        {
+            Name = "自定义项";
+        }
+
+        public CustomRegisterItem Clone()
+        {
+            return new CustomRegisterItem
+            {
+                Name = Name,
+                RegisterAddress = RegisterAddress,
+                CurrentValue = CurrentValue,
+                TargetValue = TargetValue
+            };
+        }
+    }
+
     [DataContract]
     public class DeviceProfile
     {
@@ -141,6 +174,9 @@ namespace ModbusAddressTool
         [DataMember(Order = 63)]
         public string LastResult { get; set; }
 
+        [DataMember(Order = 70)]
+        public List<CustomRegisterItem> CustomRegisterItems { get; set; }
+
         // ============================================================
         // 构造
         // ============================================================
@@ -198,6 +234,9 @@ namespace ModbusAddressTool
             LastOperationTime = "";
 
             LastResult = "";
+
+            CustomRegisterItems =
+                new List<CustomRegisterItem>();
         }
 
         // ============================================================
@@ -297,7 +336,13 @@ namespace ModbusAddressTool
                     LastOperationTime,
 
                 LastResult =
-                    LastResult
+                    LastResult,
+
+                CustomRegisterItems =
+                    CustomRegisterItems == null
+                        ? new List<CustomRegisterItem>()
+                        : CustomRegisterItems.ConvertAll(
+                            item => item.Clone())
             };
         }
     }
