@@ -182,6 +182,15 @@ namespace ModbusAddressTool
         [DataMember(Order = 70)]
         public List<CustomRegisterItem> CustomRegisterItems { get; set; }
 
+        [DataMember(Order = 71)]
+        public string ManualCommand { get; set; }
+
+        [DataMember(Order = 72)]
+        public string ManualCommandMode { get; set; }
+
+        [DataMember(Order = 73)]
+        public bool ManualCommandAutoCrc { get; set; }
+
         // ============================================================
         // 构造
         // ============================================================
@@ -242,6 +251,12 @@ namespace ModbusAddressTool
 
             CustomRegisterItems =
                 new List<CustomRegisterItem>();
+
+            ManualCommand = "";
+
+            ManualCommandMode = "HEX";
+
+            ManualCommandAutoCrc = false;
         }
 
         // ============================================================
@@ -347,7 +362,16 @@ namespace ModbusAddressTool
                     CustomRegisterItems == null
                         ? new List<CustomRegisterItem>()
                         : CustomRegisterItems.ConvertAll(
-                            item => item.Clone())
+                            item => item.Clone()),
+
+                ManualCommand =
+                    ManualCommand,
+
+                ManualCommandMode =
+                    ManualCommandMode,
+
+                ManualCommandAutoCrc =
+                    ManualCommandAutoCrc
             };
         }
     }
