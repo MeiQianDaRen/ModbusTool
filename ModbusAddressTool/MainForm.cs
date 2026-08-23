@@ -37,8 +37,11 @@ namespace ModbusAddressTool
         private ComboBox _cmbParity;
         private ComboBox _cmbDataBits;
         private ComboBox _cmbStopBits;
+        private ComboBox _cmbManualMode;
         private TextBox _txtHost;
         private TextBox _txtNetworkPort;
+        private TextBox _txtManualCommand;
+        private TextBox _txtManualResponse;
         private Control _rtuSettingsPanel;
         private Control _networkSettingsPanel;
 
@@ -59,6 +62,7 @@ namespace ModbusAddressTool
         private CheckBox _chkCustomWriteFrame;
         private CheckBox _chkAutoCrc;
         private CheckBox _chkVerify;
+        private CheckBox _chkManualAutoCrc;
 
         private RadioButton _radioInteger;
         private RadioButton _radioHex;
@@ -77,6 +81,7 @@ namespace ModbusAddressTool
         private Button _btnSaveDefault;
         private Button _btnAddCustomData;
         private Button _btnDeleteCustomData;
+        private Button _btnSendManualCommand;
 
         private RichTextBox _txtLog;
 
@@ -487,7 +492,17 @@ namespace ModbusAddressTool
 
             var listGroup = CreateSection("设备列表");
             listGroup.Dock = DockStyle.Fill;
-            listGroup.Margin = new Padding(0, 0, 5, 0);
+            listGroup.Margin = new Padding(0, 0, 5, 5);
+
+            var leftLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = new Padding(0)
+            };
+            leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 64F));
+            leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 36F));
 
             var listLayout = new TableLayoutPanel
             {
@@ -600,7 +615,76 @@ namespace ModbusAddressTool
             _grid.SelectionChanged += Grid_SelectionChanged;
             listLayout.Controls.Add(_grid, 0, 1);
             listGroup.Controls.Add(listLayout);
-            split.Panel1.Controls.Add(listGroup);
+            leftLayout.Controls.Add(listGroup, 0, 0);
+
+            var commandGroup = CreateSection("自定义发送指令");
+            commandGroup.Margin = new Padding(0, 5, 5, 0);
+            var commandLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 3,
+                Padding = new Padding(8, 5, 8, 8)
+            };
+            commandLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72F));
+            commandLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            commandLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88F));
+            commandLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            commandLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            commandLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            AddFormLabel(commandLayout, "发送数据", 0, 0);
+            _txtManualCommand = CreateFrameTextBox();
+            commandLayout.Controls.Add(_txtManualCommand, 1, 0);
+            _btnSendManualCommand = CreateButton("发送指令", SendManualCommand);
+            SetAccentButton(_btnSendManualCommand, Color.FromArgb(32, 123, 229));
+            _btnSendManualCommand.Dock = DockStyle.Fill;
+            _btnSendManualCommand.Margin = new Padding(5, 3, 0, 3);
+            commandLayout.Controls.Add(_btnSendManualCommand, 2, 0);
+
+            _chkManualAutoCrc = new CheckBox
+            {
+                Text = "自动追加 CRC16",
+                AutoSize = true,
+                Margin = new Padding(12, 5, 0, 0)
+            };
+            _cmbManualMode = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 76,
+                Margin = new Padding(4, 2, 0, 0)
+            };
+            _cmbManualMode.Items.AddRange(new object[] { "HEX", "ASCII" });
+            _cmbManualMode.SelectedItem = "HEX";
+            var commandOptions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            commandOptions.Controls.Add(_cmbManualMode);
+            commandOptions.Controls.Add(_chkManualAutoCrc);
+            AddFormLabel(commandLayout, "发送模式", 0, 1);
+            commandLayout.Controls.Add(commandOptions, 1, 1);
+            commandLayout.SetColumnSpan(commandOptions, 2);
+
+            AddFormLabel(commandLayout, "返回数据", 0, 2);
+            _txtManualResponse = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Consolas", 10F),
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.White,
+                Margin = new Padding(4, 4, 0, 0)
+            };
+            commandLayout.Controls.Add(_txtManualResponse, 1, 2);
+            commandLayout.SetColumnSpan(_txtManualResponse, 2);
+            commandGroup.Controls.Add(commandLayout);
+            leftLayout.Controls.Add(commandGroup, 0, 1);
+            split.Panel1.Controls.Add(leftLayout);
 
             var editorGroup = CreateSection("设备参数");
             editorGroup.Dock = DockStyle.Fill;
@@ -1037,8 +1121,7 @@ namespace ModbusAddressTool
 
             bool enabled = IsCommunicationConnected() &&
                 _selectedIndex >= 0 &&
-                _selectedIndex < _devices.Count &&
-                IsReadValidated(_devices[_selectedIndex]);
+                _selectedIndex < _devices.Count;
             _btnWrite.Enabled = enabled;
             if (enabled)
             {
@@ -1476,6 +1559,9 @@ namespace ModbusAddressTool
             _btnRead.Enabled =
                 connected;
 
+            if (_btnSendManualCommand != null)
+                _btnSendManualCommand.Enabled = connected;
+
             InvalidateReadValidation();
         }
 
@@ -1705,6 +1791,115 @@ namespace ModbusAddressTool
             return data;
         }
 
+        private static byte[] BuildManualFrame(
+            string text,
+            bool asciiMode,
+            bool autoCrc)
+        {
+            byte[] data = asciiMode
+                ? ParseAsciiFrame(text)
+                : ParseFrame(text);
+
+            if (data.Length == 0)
+                throw new ArgumentException("发送数据不能为空。");
+
+            return autoCrc ? AppendCrc(data) : data;
+        }
+
+        private static byte[] ParseAsciiFrame(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return new byte[0];
+
+            var bytes = new List<byte>();
+            for (int i = 0; i < text.Length; i++)
+            {
+                char value = text[i];
+                if (value != '\\')
+                {
+                    if (value > 0x7F)
+                        throw new FormatException("ASCII 模式只能输入 ASCII 字符。");
+                    bytes.Add((byte)value);
+                    continue;
+                }
+
+                if (++i >= text.Length)
+                    throw new FormatException("ASCII 转义符不完整。");
+
+                switch (text[i])
+                {
+                    case 'r':
+                        bytes.Add(0x0D);
+                        break;
+                    case 'n':
+                        bytes.Add(0x0A);
+                        break;
+                    case 't':
+                        bytes.Add(0x09);
+                        break;
+                    case '0':
+                        bytes.Add(0x00);
+                        break;
+                    case '\\':
+                        bytes.Add(0x5C);
+                        break;
+                    case 'x':
+                    case 'X':
+                        if (i + 2 >= text.Length)
+                            throw new FormatException("ASCII 的 \\x 转义必须包含两位十六进制数。");
+                        byte escaped;
+                        if (!byte.TryParse(
+                            text.Substring(i + 1, 2),
+                            NumberStyles.HexNumber,
+                            CultureInfo.InvariantCulture,
+                            out escaped))
+                        {
+                            throw new FormatException("ASCII 的 \\x 转义包含无效十六进制数。");
+                        }
+                        bytes.Add(escaped);
+                        i += 2;
+                        break;
+                    default:
+                        throw new FormatException(
+                            "不支持的 ASCII 转义：\\" + text[i]);
+                }
+            }
+            return bytes.ToArray();
+        }
+
+        private static string BytesToAscii(byte[] data)
+        {
+            var text = new StringBuilder();
+            foreach (byte value in data)
+            {
+                switch (value)
+                {
+                    case 0x0D:
+                        text.Append("\\r");
+                        break;
+                    case 0x0A:
+                        text.Append("\\n");
+                        break;
+                    case 0x09:
+                        text.Append("\\t");
+                        break;
+                    case 0x00:
+                        text.Append("\\0");
+                        break;
+                    case 0x5C:
+                        text.Append("\\\\");
+                        break;
+                    default:
+                        if (value >= 0x20 && value <= 0x7E)
+                            text.Append((char)value);
+                        else
+                            text.Append("\\x").Append(value.ToString("X2"));
+                        break;
+                }
+            }
+            return text.ToString();
+        }
+
         // ============================================================
         // 标准 Modbus RTU
         // ============================================================
@@ -1833,6 +2028,64 @@ namespace ModbusAddressTool
         // ============================================================
         // 发送
         // ============================================================
+
+        private void SendManualCommand(
+            object sender,
+            EventArgs e)
+        {
+            try
+            {
+                if (!IsCommunicationConnected())
+                    throw new InvalidOperationException("通讯连接尚未建立。");
+
+                bool asciiMode = _cmbManualMode.Text == "ASCII";
+                byte[] frame = BuildManualFrame(
+                    _txtManualCommand.Text,
+                    asciiMode,
+                    _chkManualAutoCrc.Checked);
+
+                Log("--------------------------------------------------");
+                Log("自定义 TX 发送（" +
+                    (asciiMode ? "ASCII" : "HEX") + "）：");
+                Log(BytesToHex(frame));
+                Log("自定义 TX 长度：" + frame.Length);
+
+                byte[] response;
+                TransportMode mode = GetTransportMode();
+                if (mode == TransportMode.Rtu)
+                    response = ExchangeSerial(frame, int.MaxValue);
+                else if (mode == TransportMode.Tcp)
+                    response = ExchangeTcp(frame, int.MaxValue);
+                else
+                    response = ExchangeUdp(frame);
+
+                if (response.Length == 0)
+                {
+                    _txtManualResponse.Text = "未收到返回数据";
+                    Log("自定义 RX 接收：未收到返回数据，指令已发送。");
+                }
+                else
+                {
+                    string responseText = BytesToHex(response);
+                    _txtManualResponse.Text = asciiMode
+                        ? BytesToAscii(response)
+                        : responseText;
+                    Log("自定义 RX 接收：");
+                    Log(responseText);
+                    Log("自定义 RX 长度：" + response.Length);
+                }
+            }
+            catch (Exception ex)
+            {
+                _txtManualResponse.Text = "发送失败：" + ex.Message;
+                Log("自定义指令发送失败：" + ex.Message);
+                MessageBox.Show(
+                    "自定义指令发送失败：\r\n" + ex.Message,
+                    "发送失败",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
 
         private byte[] SendFrame(
             byte[] frame,
@@ -2067,15 +2320,7 @@ namespace ModbusAddressTool
                             "第一个寄存器值：" +
                             FormatValue(value));
 
-                        if (value != expectedAddress)
-                        {
-                            throw new InvalidDataException(string.Format(
-                                "设备身份不匹配：当前选择地址为 {0}，读取值为 {1}。",
-                                expectedAddress,
-                                value));
-                        }
-
-                        Log("设备地址验证通过：" + expectedAddress);
+                        Log("设备响应验证通过：" + expectedAddress);
                     }
                 }
 
@@ -2265,18 +2510,8 @@ namespace ModbusAddressTool
 
             DeviceProfile device = _devices[_selectedIndex];
             bool ok = ReadDevice(device);
-            if (ok &&
-                (device.CustomRegisterItems == null ||
-                 device.CustomRegisterItems.All(item => item.CurrentValue.HasValue)))
-            {
-                MarkReadValidated(device);
-                Log("读取验证通过，已允许修改当前设备。");
-            }
-            else
-            {
-                InvalidateReadValidation();
-                Log("读取验证未通过，修改功能保持禁用。");
-            }
+            Log(ok ? "读取完成。" : "读取失败，请查看通讯日志。");
+            UpdateWriteButtonState();
 
             Log(
                 "========== 读取结束 ==========");
@@ -2295,17 +2530,6 @@ namespace ModbusAddressTool
             DeviceProfile device =
                 _devices[
                     _selectedIndex];
-
-            if (!IsReadValidated(device))
-            {
-                InvalidateReadValidation();
-                MessageBox.Show(
-                    "当前设备尚未完成读取验证，请先读取当前设备及全部自定义项。",
-                    "禁止修改",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
 
             Log(
                 "========== 开始修改 ==========");
@@ -2816,42 +3040,58 @@ namespace ModbusAddressTool
             if (_grid == null)
                 return;
 
-            _grid.Rows.Clear();
-
-            foreach (
-                DeviceProfile device
-                in _devices)
+            int selectedIndex = _selectedIndex;
+            _suppressDeviceSelection = true;
+            try
             {
-                int row =
-                    _grid.Rows.Add();
+                _grid.Rows.Clear();
 
-                _grid.Rows[row]
-                    .Cells["Name"]
-                    .Value =
-                    device.Name;
+                foreach (
+                    DeviceProfile device
+                    in _devices)
+                {
+                    int row =
+                        _grid.Rows.Add();
 
-                _grid.Rows[row]
-                    .Cells["Register"]
-                    .Value =
-                    device.RegisterAddress
-                        .ToString("X4");
+                    _grid.Rows[row]
+                        .Cells["Name"]
+                        .Value =
+                        device.Name;
 
-                _grid.Rows[row]
-                    .Cells["Current"]
-                    .Value =
-                    FormatValue(
-                        device.CurrentAddress);
+                    _grid.Rows[row]
+                        .Cells["Register"]
+                        .Value =
+                        device.RegisterAddress
+                            .ToString("X4");
 
-                _grid.Rows[row]
-                    .Cells["New"]
-                    .Value =
-                    FormatValue(
-                        device.NewAddress);
+                    _grid.Rows[row]
+                        .Cells["Current"]
+                        .Value =
+                        FormatValue(
+                            device.CurrentAddress);
 
-                _grid.Rows[row]
-                    .Cells["Status"]
-                    .Value =
-                    device.LastResult;
+                    _grid.Rows[row]
+                        .Cells["New"]
+                        .Value =
+                        FormatValue(
+                            device.NewAddress);
+
+                    _grid.Rows[row]
+                        .Cells["Status"]
+                        .Value =
+                        device.LastResult;
+                }
+
+                _grid.ClearSelection();
+                if (selectedIndex >= 0 && selectedIndex < _grid.Rows.Count)
+                {
+                    _grid.Rows[selectedIndex].Selected = true;
+                    _grid.CurrentCell = _grid.Rows[selectedIndex].Cells[0];
+                }
+            }
+            finally
+            {
+                _suppressDeviceSelection = false;
             }
         }
 
@@ -3001,31 +3241,42 @@ namespace ModbusAddressTool
 
             foreach (CustomRegisterItem item in device.CustomRegisterItems)
             {
-                ushort registerCount = item.RegisterCount == 0
-                    ? (ushort)1
-                    : item.RegisterCount;
-                byte[] frame = BuildReadFrame(
-                    device.CurrentAddress,
-                    device.ReadFunctionCode,
-                    item.RegisterAddress,
-                    registerCount);
-                byte[] response = SendFrame(
-                    frame,
-                    5 + registerCount * 2,
-                    device);
-                ValidateStandardResponse(
-                    response,
-                    device.CurrentAddress,
-                    device.ReadFunctionCode);
-                item.CurrentValue = ParseRegisterValue(
-                    response,
-                    registerCount);
-                Log(string.Format(
-                    "自定义项目读取：{0}，寄存器=0x{1:X4}，数量={2}，当前值={3}",
-                    item.Name,
-                    item.RegisterAddress,
-                    registerCount,
-                    item.CurrentValue.Value));
+                item.CurrentValue = null;
+                try
+                {
+                    ushort registerCount = item.RegisterCount == 0
+                        ? (ushort)1
+                        : item.RegisterCount;
+                    byte[] frame = BuildReadFrame(
+                        device.CurrentAddress,
+                        device.ReadFunctionCode,
+                        item.RegisterAddress,
+                        registerCount);
+                    byte[] response = SendFrame(
+                        frame,
+                        5 + registerCount * 2,
+                        device);
+                    ValidateStandardResponse(
+                        response,
+                        device.CurrentAddress,
+                        device.ReadFunctionCode);
+                    item.CurrentValue = ParseRegisterValue(
+                        response,
+                        registerCount);
+                    Log(string.Format(
+                        "自定义项目读取：{0}，寄存器=0x{1:X4}，数量={2}，当前值={3}",
+                        item.Name,
+                        item.RegisterAddress,
+                        registerCount,
+                        item.CurrentValue.Value));
+                }
+                catch (Exception ex)
+                {
+                    Log(string.Format(
+                        "自定义项目读取失败：{0}，{1}",
+                        item.Name,
+                        ex.Message));
+                }
             }
         }
 
