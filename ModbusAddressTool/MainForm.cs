@@ -914,18 +914,47 @@ namespace ModbusAddressTool
             customDataGroup.Controls.Add(customDataLayout);
             _deviceEditorLayout.Controls.Add(customDataGroup, 0, 2);
 
-            var actions = new FlowLayoutPanel
+            var actions = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                WrapContents = true,
+                ColumnCount = 2,
+                RowCount = 1,
                 Padding = new Padding(0, 8, 0, 0),
+                Margin = new Padding(0)
+            };
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+
+            var deviceActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                WrapContents = false,
                 Margin = new Padding(0)
             };
             _btnRead = CreateButton("读取当前设备", ReadSelectedDevice);
             _btnWrite = CreateButton("保存修改", WriteSelectedDevice);
             SetAccentButton(_btnWrite, Color.FromArgb(32, 123, 229));
-            actions.Controls.Add(_btnRead);
-            actions.Controls.Add(_btnWrite);
+            deviceActions.Controls.Add(_btnRead);
+            deviceActions.Controls.Add(_btnWrite);
+            actions.Controls.Add(deviceActions, 0, 0);
+
+            var logActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            var clearLogButton = CreateButton(
+                "清空日志",
+                delegate
+                {
+                    if (_txtLog != null)
+                        _txtLog.Clear();
+                });
+            clearLogButton.Width = 84;
+            logActions.Controls.Add(clearLogButton);
+            actions.Controls.Add(logActions, 1, 0);
 
             editorHost.Controls.Add(_deviceEditorLayout);
             var editorContainer = new TableLayoutPanel
@@ -2719,6 +2748,15 @@ namespace ModbusAddressTool
                     device.RegisterCount = 1;
                 if (device.CustomRegisterItems == null)
                     device.CustomRegisterItems = new List<CustomRegisterItem>();
+                if (device.ManualCommand == null)
+                    device.ManualCommand = "";
+                device.ManualCommandMode =
+                    string.Equals(
+                        device.ManualCommandMode,
+                        "ASCII",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? "ASCII"
+                        : "HEX";
 
                 foreach (CustomRegisterItem item in device.CustomRegisterItems)
                 {
@@ -2947,6 +2985,15 @@ namespace ModbusAddressTool
 
             device.CustomRegisterItems =
                 customItems;
+
+            device.ManualCommand =
+                _txtManualCommand.Text;
+
+            device.ManualCommandMode =
+                _cmbManualMode.Text == "ASCII" ? "ASCII" : "HEX";
+
+            device.ManualCommandAutoCrc =
+                _chkManualAutoCrc.Checked;
 
             return true;
         }
@@ -3198,6 +3245,17 @@ namespace ModbusAddressTool
 
             _chkVerify.Checked =
                 device.VerifyAfterWrite;
+
+            _txtManualCommand.Text =
+                device.ManualCommand ?? "";
+
+            _cmbManualMode.SelectedItem =
+                device.ManualCommandMode == "ASCII" ? "ASCII" : "HEX";
+
+            _chkManualAutoCrc.Checked =
+                device.ManualCommandAutoCrc;
+
+            _txtManualResponse.Clear();
 
             if (device.CustomRegisterItems == null)
                 device.CustomRegisterItems = new List<CustomRegisterItem>();
